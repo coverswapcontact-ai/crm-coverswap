@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, SlidersHorizontal, Users, Wallet, WandSparkles, X, type LucideIcon } from "lucide-react";
+import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, MessagesSquare, PhoneForwarded, SlidersHorizontal, Users, Wallet, WandSparkles, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -17,7 +17,7 @@ import { TRANS } from "./ui";
  * Mission 18 (A5) : plus de compteur des tâches de fond en échec : un échec remonte comme tâche système dans Tâches
  * (« Relancer N tâches de fond en échec »), un seul compteur. La route le rend encore, pour les réponses mises en cache.
  */
-export type Compteurs = { tachesAujourdhui: number; leadsEnRetard: number; mailATraiter: number };
+export type Compteurs = { tachesAujourdhui: number; leadsEnRetard: number; mailATraiter: number; messagesAEnvoyer: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 // Mission 13 (lot 5) : l'événement vit dans `evenements.ts` (émis par `appelApi` après chaque écriture) ; réexporté pour les écrans qui l'importaient d'ici.
@@ -55,14 +55,17 @@ export type Entree = {
 // Mission 18 (A6) : les tarifs passent dans Paramètres (onglet Tarifs). Navigation cible, 10 onglets : principaux Tâches,
 // Leads, Dossiers, Mail, Clients, Analytique ; secondaires Simulateur, Site, Finances, Paramètres. Barre du bas inchangée
 // (Tâches, Leads, Dossiers, Mail, Analytique, puis Plus) ; « Plus » : Clients, puis Simulateur, Site, Finances, Paramètres.
+// Mission 25 (10/10/2026) : « Messagerie » (une conversation par client, les messages préparés, « Un par un ») entre en
+// deuxième, dans la barre du bas ; Analytique passe dans « Plus » sur téléphone (toujours en haut sur ordinateur).
 export const PRINCIPALES: Entree[] = [
   { href: "/taches", libelle: "Tâches", icone: ListChecks, compteur: "tachesAujourdhui", mobile: true },
+  { href: "/messagerie", libelle: "Messagerie", court: "Messages", icone: MessagesSquare, compteur: "messagesAEnvoyer", mobile: true },
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsEnRetard", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   // Mission 7 (22/09/2026) : SMS retiré (pas de numéro professionnel) ; le mail prend le relais : l'onglet Mail, trié d'office.
   { href: "/mail", libelle: "Mail", icone: Mail, compteur: "mailATraiter", mobile: true },
   { href: "/clients", libelle: "Clients", icone: Users },
-  { href: "/analytique", libelle: "Analytique", icone: ChartLine, mobile: true },
+  { href: "/analytique", libelle: "Analytique", icone: ChartLine },
 ];
 
 // Écrans secondaires : petites icônes à droite (libellés sur très grand écran), menu « Plus » sur téléphone.
@@ -101,7 +104,7 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ tachesAujourdhui: 0, leadsEnRetard: 0, mailATraiter: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ tachesAujourdhui: 0, leadsEnRetard: 0, mailATraiter: 0, messagesAEnvoyer: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 

@@ -111,7 +111,7 @@ describe("les pages de « Plus » : l'en-tête v2 sous condition, l'écran v1 te
 describe("« À valider » dans Plus : le nombre en phrase, jamais en badge", () => {
   test("la route des compteurs ajoute propositionsEnAttente (ajout seulement : les clés d'avant restent)", () => {
     assert.match(compteurs, /import \{ compterPropositionsEnAttente \} from "@\/lib\/validation\/service";/);
-    assert.match(compteurs, /NextResponse\.json\(\{ tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter, propositionsEnAttente \}\)/);
+    assert.match(compteurs, /NextResponse\.json\(\{ tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter, propositionsEnAttente(, messagesAEnvoyer)? \}\)/, "mission 25 : messagesAEnvoyer ajouté, rien de retiré");
   });
 
   test("la navigation compose « À valider — N en attente » par libelleDansPlus, sur cette entrée seulement ; un seul compteur reste", () => {

@@ -107,7 +107,7 @@ describe("relance de devis : le SMS à copier (toujours), le mail s'il y a une a
     assert.ok(premiere, "le client sans e-mail est dans les relances");
     assert.deepEqual([premiere.proposable, premiere.rang, premiere.relancesFaites, premiere.adresse, premiere.mail], [true, 1, 0, null, null]);
     assert.equal(premiere.sms?.code, "RELANCE_DEVIS_1");
-    assert.equal(premiere.sms?.texte, "Bonjour, c'est Lucas de CoverSwap. Avez-vous pu regarder votre devis ? Il est toujours dans votre espace client. Je reste disponible si vous avez des questions.");
+    assert.equal(premiere.sms?.texte, "Bonjour, avez-vous pu regarder votre devis ? Il est toujours dans votre espace client. Je reste disponible si vous avez des questions.");
     assert.deepEqual(premiere.sms?.relance, { documentId: b.devisId, rang: 1 });
     assert.equal(premiere.sms?.telephone, (await dossierDe(b.dossierId)).clientTelephone);
 
@@ -252,7 +252,7 @@ describe("relance de devis : le SMS à copier (toujours), le mail s'il y a une a
     const espace = await contact("Solal", 4);
     const session = await execution.ouvrirSession({ jetonId: null, clientNom: "essai", utilisateur: "essai" });
     const { texte } = await execution.executerOutil((await import("@/lib/assistant/outils/lister")).outilLister as unknown as import("@/lib/assistant/definition").DefinitionOutil<Record<string, unknown>>, { liste: "RELANCES" }, session);
-    assert.match(texte, new RegExp(`Bouvier Léna : devis ${pret.numero} .* — relance n° 1 proposable\\. SMS \\(RELANCE_DEVIS_1\\) : « Bonjour, c'est Lucas de CoverSwap\\. Avez-vous pu regarder votre devis \\?[^»]*»\\. Pas de mail : pas d'adresse e-mail, le SMS suffit \\[dossier:${pret.dossierId}\\]`));
+    assert.match(texte, new RegExp(`Bouvier Léna : devis ${pret.numero} .* — relance n° 1 proposable\\. SMS \\(RELANCE_DEVIS_1\\) : « Bonjour, avez-vous pu regarder votre devis \\?[^»]*»\\. Pas de mail : pas d'adresse e-mail, le SMS suffit \\[dossier:${pret.dossierId}\\]`));
     assert.match(texte, new RegExp(`Bouvier Tom : devis ${tot.numero} .* — prochaine relance proposable le \\d{2}/\\d{2}/\\d{4} \\(par SMS : pas d'adresse e-mail\\) \\[dossier:${tot.dossierId}\\]`));
     assert.match(texte, /relances? photos proposables? :/);
     assert.match(texte, new RegExp(`Solal Six : espace ouvert il y a 4 jours, ni photo ni simulation — relance photos n° 1 \\(lien jamais envoyé\\)\\. SMS \\(LIEN_ESPACE\\) : « Bonjour Solal, .*https://coverswap\\.fr/e/[A-Za-z0-9_-]+ » \\[dossier:${espace.dossierId}\\]`));
@@ -275,7 +275,7 @@ describe("relance photos : un espace ouvert sans photo ni simulation", () => {
     const p = await photosDe(jamais.dossierId);
     assert.ok(p, "proposée");
     assert.deepEqual([p.rang, p.lienCommunique, p.sms?.code, p.sms?.relance], [1, false, "LIEN_ESPACE", { type: "PHOTOS", rang: 1 }]);
-    assert.match(p.sms!.texte, /^Bonjour Ninon, c'est Lucas de CoverSwap\. Comme convenu, voici votre espace personnel pour votre projet : .* https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+$/);
+    assert.match(p.sms!.texte, /^Bonjour Ninon, comme convenu, voici votre espace personnel pour votre projet : .* https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+$/);
     assert.equal(await photosDe((await contact("Tristan", 2)).dossierId), undefined, "deux jours seulement : pas encore");
 
     // Le lien lui a été communiqué (SMS copié) il y a 4 jours : « à nouveau ».
@@ -285,7 +285,7 @@ describe("relance photos : un espace ouvert sans photo ni simulation", () => {
     await prisma.dossierEvenement.update({ where: { id: note.id }, data: { createdAt: ilYa(4) } });
     const rappel = (await photosDe(recu.dossierId))!;
     assert.deepEqual([rappel.lienCommunique, rappel.sms?.code], [true, "LIEN_ESPACE_RAPPEL"]);
-    assert.equal(rappel.sms?.texte, `Bonjour Maëlle, c'est Lucas de CoverSwap. Voici à nouveau le lien de votre espace, tout votre projet y est à jour : ${lien.lien}`);
+    assert.equal(rappel.sms?.texte, `Bonjour Maëlle, voici à nouveau le lien de votre espace, tout votre projet y est à jour : ${lien.lien}`);
     // Communiqué il y a un jour seulement : le délai court depuis le lien.
     await prisma.dossierEvenement.update({ where: { id: note.id }, data: { createdAt: ilYa(1) } });
     assert.equal(await photosDe(recu.dossierId), undefined);

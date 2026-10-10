@@ -61,7 +61,9 @@ export async function confirmerEnvoi(id: string, entree: { texte?: string | null
   const { message, suivi } = await messageDe(id);
   if (message.statut === "ENVOYE") return { deja: true, messageId: id };
   if (!OUVERTS.includes(message.statut) && message.statut !== "NON_ENVOYE") throw new ErreurMetier("Ce message n'est plus à envoyer.", 409);
-  const texteEnvoye = entree.texte?.trim() && entree.texte.trim() !== message.texte.trim() ? entree.texte.trim().slice(0, 1600) : null;
+  const { premiersSms, texteAEnvoyer } = await import("./vues");
+  const prevu = texteAEnvoyer(message, (await premiersSms([suivi.id])).has(suivi.id));
+  const texteEnvoye = entree.texte?.trim() && entree.texte.trim() !== prevu.trim() ? entree.texte.trim().slice(0, 1600) : prevu !== message.texte ? prevu : null;
   const le = entree.le && entree.le.getTime() <= maintenant.getTime() ? entree.le : maintenant;
   const texte = texteEnvoye ?? message.texte;
   await prisma.messagePrepare.update({ where: { id }, data: { statut: "ENVOYE", envoyeLe: le, texteEnvoye, decidePar: await acteur(), motif: null } });

@@ -5838,3 +5838,17 @@ a8cfe0d, qui porte les missions 23-24 non poussées). Conception : `docs/MESSAGE
   `/api/messagerie/*`. Tests : 1 763 → 1 805 (`regles-pures.test.ts` 27, `scenario.test.ts` 14 : le scénario
   « Démo Messagerie » du cahier en 8 étapes, rejeu sans doublon, STOP, pause générale, démarrage en douceur, 19 h 30).
   Conception et décisions prises seul : `docs/MESSAGERIE.md` § 5. Règle des envois automatiques mise à jour en tête.
+- Lot 4 (messagerie manuelle, 10/10) : écran `/messagerie` (2e entrée de la barre du bas, compteur des messages à
+  envoyer) : liste (filtres, recherche, glisser = archiver ou lu), conversation (« Où on en est » corrigeable, journal
+  repliable, bulles SMS/mail/espace, cartes préparées : Ouvrir Messages avec le texte → ✅ Envoyé, Modifier, Plus tard,
+  Pas envoyé, « Je l'avais envoyé »), zone de saisie (Rapides Q1–Q8, ✨ IA, « Sa réponse » avec heure et photos, Note,
+  outils « + »), mode « Un par un » jusqu'à « Tout est traité pour aujourd'hui », « Tout mettre en pause », activation
+  des notifications ; feuille de fin d'appel (`FinAppel`) branchée sur la messagerie (7 issues, le message préparé en
+  retour) ; mention STOP ajoutée à l'envoi du premier SMS seulement ; `scripts/demo-messagerie.ts` (base d'essai).
+- Lot 3 (messages, 10/10) : Paramètres → SMS commence par la messagerie (mode d'envoi, pause, lien d'avis, mise en
+  service) puis les 41 messages (variantes, aperçu pour un client fictif à chaque frappe, mode Auto / Validation /
+  Désactivé ; « Désactivé » appliqué à la préparation) ; `/api/messagerie/modeles` ; bouton « Créer le dossier Démo
+  Messagerie » (menu de la Messagerie, `/api/messagerie/demo`) ; 14 SMS de l'écran SMS sans « Lucas de CoverSwap »
+  (migration `sms-sans-presentation-25`, textes réécrits par Lucas gardés) ; Manuel et Active posés par défaut
+  (`messagerie-reglages-25`) ; contrôleur sensible aux accents ; « nouvel intérieur ». Les 41 messages × 5 profils de
+  clients rendus et contrôlés, liens iPhone et Android vérifiés. Tests : 1 805 → 1 823.

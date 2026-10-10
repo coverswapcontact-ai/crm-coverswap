@@ -1,7 +1,8 @@
 /**
  * Mission 25 — écrire un message préparé à partir d'une intention : texte de la liste (ou celui que Lucas a modifié
- * dans Paramètres → SMS), variables, variante qui convient, canal (SMS, sinon mail, sinon espace), mention STOP au
- * premier SMS, personnalisation par l'IA (contrôlée), heure permise, mode. Une écriture idempotente par clé.
+ * dans Paramètres → SMS), variables, variante qui convient, canal (SMS, sinon mail, sinon espace), personnalisation par
+ * l'IA (contrôlée), heure permise, mode (« Désactivé » : rien n'est préparé). La mention STOP du premier SMS s'ajoute à
+ * l'envoi (vues.ts). Une écriture idempotente par clé.
  */
 import prisma from "@/lib/prisma";
 import { lireParametre } from "@/lib/parametres/service";
@@ -10,7 +11,7 @@ import { definitionMessage, estCodeMessage, estReactif, variantesDe, type CodeMe
 import { texteControle } from "./controleur";
 import { heureEnLettres, heurePermise, jourEnLettres, momentParis, quandRappelLisible, quandReponseLisible } from "./horaires";
 import { personnaliserParIa } from "./ia";
-import { avecStopSiPremier, formuleBonjour, remplirTexte, texteDeLaListe, type ValeursMessage } from "./texte";
+import { formuleBonjour, remplirTexte, texteDeLaListe, type ValeursMessage } from "./texte";
 import type { CanalMessage, EtatSuivi, Intention, StatutMessage } from "./types";
 
 /** Les textes modifiés par Lucas (Paramètres → SMS) et les modes réglés, par code de ligne (« P3 », « P3.proche »). */
@@ -88,7 +89,8 @@ export async function rediger(etat: EtatSuivi, intention: Intention, surcharges:
   if (!destination) return { refus: etat.stop ? "STOP : plus aucun message" : "ni mobile, ni e-mail, ni espace" };
   const code = intention.code;
   const reponse = estReactif(code) || Boolean(intention.reponse);
-  const prevuLe = heurePermise(intention.voulu.getTime() < maintenant.getTime() ? maintenant : intention.voulu, reponse ? "REACTIF" : "TRAVAIL", intention.cle);
+  // « Tout de suite » : une heure voulue à moins d'une minute vaut maintenant (le fait vient d'arriver).
+  const prevuLe = heurePermise(intention.voulu.getTime() - maintenant.getTime() < 60_000 ? maintenant : intention.voulu, reponse ? "REACTIF" : "TRAVAIL", intention.cle);
 
   if (!estCodeMessage(code)) {
     const texte = intention.valeurs?.texte ?? "";
@@ -96,6 +98,9 @@ export async function rediger(etat: EtatSuivi, intention: Intention, surcharges:
     return { code, cle: intention.cle, ...destination, texte, texteValide: texte, variante: "defaut", prevuLe, mode: "VALIDATION", reponse, raison: intention.raison, ia: false, ecartControle: null, simulationId: null, sourceId: intention.sourceId ?? null };
   }
   const definition = definitionMessage(code);
+  // Lot 3 : un message réglé « Désactivé » (Paramètres → SMS) n'est jamais préparé, en mode Manuel comme en Android ;
+  // une réponse rapide part seulement quand Lucas la choisit, elle n'a pas de mode.
+  if (surcharges.modes[code] === "DESACTIVE" && definition.nature !== "RAPIDE") return { refus: "désactivé dans Paramètres → SMS" };
   const besoin = new Set<VariableMessage>(Object.values(definition.textes).flatMap((t) => (t.match(/\{(\w+)\}/g) ?? []).map((v) => v.slice(1, -1) as VariableMessage)));
   const valeurs: ValeursMessage = { bonjour: formuleBonjour(etat.prenom) };
   if (besoin.has("lien")) valeurs.lien = await lienEspaceDuDossier(etat.cible.dossierId);
@@ -126,8 +131,9 @@ export async function rediger(etat: EtatSuivi, intention: Intention, surcharges:
   }
   if (!choisie) return { refus: `variable impossible à remplir : {${manque.join("}, {")}}` };
 
-  let texteValide = choisie.texte;
-  if (destination.canal === "SMS") texteValide = avecStopSiPremier(texteValide, etat.premierSms && !/\bstop\b/i.test(texteValide));
+  // La mention STOP du premier SMS n'est pas écrite ici : elle s'ajoute au moment de l'envoi (vues.ts › premiersSms),
+  // sinon trois messages préparés d'avance la porteraient tous.
+  const texteValide = choisie.texte;
   let texte = texteValide;
   let ia = false;
   let ecart: string | null = null;
@@ -135,17 +141,20 @@ export async function rediger(etat: EtatSuivi, intention: Intention, surcharges:
     const propose = await personnaliserParIa({ code, texteValide: choisie.texte, etat }, maintenant);
     if (propose && propose.trim() !== choisie.texte.trim()) {
       const controle = texteControle(propose, choisie.texte, {
-        lienAttendu: definition.lien === "ESPACE" ? valeurs.lien ?? null : definition.lien === "AVIS" ? valeurs.lien_avis ?? null : null,
+        // Le lien que porte le texte validé choisi (P2 n'en a que dans sa variante « après P1 »).
+        lienAttendu: valeurs.lien && choisie.texte.includes(valeurs.lien) ? valeurs.lien : valeurs.lien_avis && choisie.texte.includes(valeurs.lien_avis) ? valeurs.lien_avis : null,
         premierContact: Boolean(definition.premierContact),
         prenom: etat.prenom,
         permis: Object.values(valeurs).filter((v): v is string => typeof v === "string"),
       });
       ia = controle.ia;
       ecart = controle.ecart;
-      if (controle.ia) texte = destination.canal === "SMS" ? avecStopSiPremier(controle.texte, etat.premierSms) : controle.texte;
+      if (controle.ia) texte = controle.texte;
     }
   }
-  const mode: ModeMessage = surcharges.modes[code] ?? (etat.validationForcee || etat.faits.sensible ? "VALIDATION" : definition.mode);
+  // Dossier sensible ou validation forcée : toujours Validation ; sinon le mode réglé par Lucas, sinon celui de la liste.
+  const regle = surcharges.modes[code];
+  const mode: ModeMessage = etat.validationForcee || etat.faits.sensible ? "VALIDATION" : regle === "AUTO" || regle === "VALIDATION" ? regle : definition.mode;
   return {
     code,
     cle: intention.cle,
@@ -154,7 +163,7 @@ export async function rediger(etat: EtatSuivi, intention: Intention, surcharges:
     texteValide,
     variante: choisie.variante,
     prevuLe,
-    mode: mode === "AUTO" && (etat.validationForcee || etat.faits.sensible) ? "VALIDATION" : mode,
+    mode,
     reponse,
     raison: intention.raison,
     ia,

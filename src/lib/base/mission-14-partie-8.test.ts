@@ -195,13 +195,13 @@ describe("noter_appel rend le SMS proposé ; noter_sms note son envoi comme « C
   test("pas de réponse : le SMS A avec le rappel de demain 18 h, puis « noter_sms » avec le code seul : le texte est recomposé, tracé sur le lead", async () => {
     const u = await lead("Ulysse");
     const appel = await appeler("noter_appel", { leadId: u.id, issue: "PAS_DE_REPONSE", commande: "Ulysse ne répond pas" });
-    assert.match(appel.texte, /^Appel noté\. Rappel demain à 18:00\. \(Ulysse Huit\)\nSMS proposé \(PAS_DE_REPONSE\) : « Bonjour, c'est Lucas de CoverSwap\. J'ai essayé de vous joindre au sujet de votre projet de rénovation\. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange\. » — une fois envoyé, dis-le-moi \(« noter_sms »\)\.$/);
+    assert.match(appel.texte, /^Appel noté\. Rappel demain à 18:00\. \(Ulysse Huit\)\nSMS proposé \(PAS_DE_REPONSE\) : « Bonjour, j'ai essayé de vous joindre au sujet de votre projet de rénovation\. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange\. » — une fois envoyé, dis-le-moi \(« noter_sms »\)\.$/);
     assert.equal(await prisma.interaction.count({ where: { leadId: u.id, type: "SMS" } }), 0, "rien n'est tracé tant que Lucas n'a pas envoyé");
 
     const note = await appeler("noter_sms", { leadId: u.id, code: "PAS_DE_REPONSE", commande: "C'est envoyé" });
-    assert.match(note.texte, /^Noté : SMS PAS_DE_REPONSE envoyé à Ulysse Huit \(écrit dans les échanges du lead\)\.\nTexte noté : « Bonjour, c'est Lucas de CoverSwap\. J'ai essayé de vous joindre au sujet de votre projet de rénovation\. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange\. »$/);
+    assert.match(note.texte, /^Noté : SMS PAS_DE_REPONSE envoyé à Ulysse Huit \(écrit dans les échanges du lead\)\.\nTexte noté : « Bonjour, j'ai essayé de vous joindre au sujet de votre projet de rénovation\. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange\. »$/);
     const echange = await prisma.interaction.findFirstOrThrow({ where: { leadId: u.id, type: "SMS" } });
-    assert.match(echange.contenu, /^SMS PAS_DE_REPONSE copié : « Bonjour, c'est Lucas de CoverSwap\. J'ai essayé/);
+    assert.match(echange.contenu, /^SMS PAS_DE_REPONSE copié : « Bonjour, j'ai essayé/);
     assert.equal((await leadDe(u.id)).rappelLe?.toISOString(), "2026-09-29T16:00:00.000Z", "le rappel de l'appel n'a pas bougé");
     const journal = await prisma.appelOutil.findFirst({ where: { outil: "noter_sms", commande: "C'est envoyé" } });
     assert.deepEqual([journal?.statut, journal?.niveau], ["FAIT", "REVERSIBLE"]);
@@ -210,13 +210,13 @@ describe("noter_appel rend le SMS proposé ; noter_sms note son envoi comme « C
   test("intéressé : le SMS du lien est dans la réponse ; « noter_sms » LIEN_ESPACE → lien communiqué, main au client, « Lien pas encore envoyé » tombe ; un double toucher ne trace qu'une fois", async () => {
     const v = await lead("Victor");
     const appel = await appeler("noter_appel", { leadId: v.id, issue: "INTERESSE" });
-    assert.match(appel.texte, /^Appel noté\. Dossier et espace ouverts\. \(Victor Huit\)\nSMS proposé \(LIEN_ESPACE\) : « Bonjour Victor, c'est Lucas de CoverSwap\. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\. https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+ » — une fois envoyé, dis-le-moi \(« noter_sms »\)\.$/);
+    assert.match(appel.texte, /^Appel noté\. Dossier et espace ouverts\. \(Victor Huit\)\nSMS proposé \(LIEN_ESPACE\) : « Bonjour Victor, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\. https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+ » — une fois envoyé, dis-le-moi \(« noter_sms »\)\.$/);
     const { dossierId } = appel.donnees as { dossierId: string };
     assert.ok((await signaux(dossierId)).includes("NON_ENVOYE"), "rien d'envoyé encore");
 
     // Par le nom : la cible est son dossier (titre « nom — objet »), comme pour tout outil d'écriture.
     const note = await appeler("noter_sms", { nom: "Victor Huit", code: "LIEN_ESPACE", commande: "Je lui ai envoyé le lien" });
-    assert.match(note.texte, /^Noté : SMS LIEN_ESPACE envoyé à Victor Huit — Recouvrement de cuisine \(écrit dans l'histoire du dossier, lien de l'espace communiqué : la main passe au client\)\.\nTexte noté : « Bonjour Victor, c'est Lucas de CoverSwap\. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\. https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+ »$/);
+    assert.match(note.texte, /^Noté : SMS LIEN_ESPACE envoyé à Victor Huit — Recouvrement de cuisine \(écrit dans l'histoire du dossier, lien de l'espace communiqué : la main passe au client\)\.\nTexte noté : « Bonjour Victor, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\. https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+ »$/);
     assert.ok(!(await signaux(dossierId)).includes("NON_ENVOYE"), "le lien est communiqué");
     const d = await dossierDe(dossierId);
     assert.deepEqual([d.main, d.mainMotif], ["CLIENT", "Lien de son espace envoyé : en attente du client"]);
@@ -238,7 +238,7 @@ describe("noter_appel rend le SMS proposé ; noter_sms note son envoi comme « C
       data: { clientNom: "Zora Huit", clientAdresse: "", clientCp: "34970", clientVille: "Lattes", clientTelephone: z.telephone!, objet: "Recouvrement de cuisine", source: "META_ADS", etape: "QUALIFICATION", leadId: z.id, prochaineAction: "Rappeler", prochaineActionDate: new Date("2026-10-01T12:00:00.000Z"), prochaineActionInstant: null },
     });
     const jourSeul = await appeler("noter_sms", { dossierId: dossier.id, code: "A_RAPPELER" });
-    assert.match(jourSeul.texte, /\nTexte noté : « Merci pour votre réponse ! C'est noté, je vous rappelle jeudi\. À très vite, Lucas de CoverSwap\. »$/);
+    assert.match(jourSeul.texte, /\nTexte noté : « Merci pour votre réponse ! C'est noté, je vous rappelle jeudi\. À très vite ! »$/);
     assert.doesNotMatch(jourSeul.texte, /vers 1[34] h/);
     // Le même rappel choisi à l'heure (fin d'appel, agenda) : l'heure est dite.
     await prisma.dossier.update({ where: { id: dossier.id }, data: { prochaineActionDate: new Date("2026-10-01T08:00:00.000Z"), prochaineActionInstant: new Date("2026-10-01T08:00:00.000Z") } });
@@ -261,7 +261,7 @@ describe("noter_appel rend le SMS proposé ; noter_sms note son envoi comme « C
   test("relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et son rang, compte la relance et passe le dossier en « Relance » ; puis la 2ᵉ ; puis refus ; refus sans dossier", async () => {
     const b = await dossierAvecDevis("Brunet Zoé", 6);
     const premiere = await appeler("noter_sms", { dossierId: b.dossierId, code: "RELANCE_DEVIS_1", commande: "Relance envoyée à Zoé" });
-    assert.match(premiere.texte, new RegExp(`^Noté : SMS RELANCE_DEVIS_1 envoyé à Brunet Zoé \\(écrit dans l'histoire du dossier, relance n° 1 du devis ${b.numero} comptée \\(2 au plus, mail ou SMS\\)\\)\\.\nTexte noté : « Bonjour, c'est Lucas de CoverSwap\\. Avez-vous pu regarder votre devis \\? Il est toujours dans votre espace client\\. Je reste disponible si vous avez des questions\\. »$`));
+    assert.match(premiere.texte, new RegExp(`^Noté : SMS RELANCE_DEVIS_1 envoyé à Brunet Zoé \\(écrit dans l'histoire du dossier, relance n° 1 du devis ${b.numero} comptée \\(2 au plus, mail ou SMS\\)\\)\\.\nTexte noté : « Bonjour, avez-vous pu regarder votre devis \\? Il est toujours dans votre espace client\\. Je reste disponible si vous avez des questions\\. »$`));
     assert.deepEqual([(await dossierDe(b.dossierId)).etape, (await dossierDe(b.dossierId)).mainMotif], ["RELANCE", "Relance envoyée : en attente de sa réponse"]);
     const etat = (await relances.listerRelances(LUNDI, { dossierId: b.dossierId })).devis[0];
     assert.deepEqual([etat.relancesFaites, etat.rang, etat.proposable], [1, 2, false]);
@@ -290,7 +290,7 @@ describe("lister ESPACES filtré (ex-« espaces_clients ») : les espaces sans p
     const x = await contact("Xavier", 4);
     const trois = await appeler("lister", { liste: "ESPACES", filtres: { sans_photo_ni_simulation_depuis_jours: 3 } });
     assert.match(trois.texte, /^\d+ projets? d'espace sans photo ni simulation depuis 3 jours \(rien n'est envoyé : Lucas copie le SMS, puis « noter_sms »\) :\n/);
-    assert.match(trois.texte, new RegExp(`- Xavier Huit : espace ouvert il y a 4 jours, ni photo ni simulation \\(lien jamais envoyé\\), \\+33614080\\d{3} — SMS \\(LIEN_ESPACE\\) : « Bonjour Xavier, c'est Lucas de CoverSwap\\. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\\. https://coverswap\\.fr/e/[A-Za-z0-9_-]+ » \\[dossier:${x.dossierId}\\]`));
+    assert.match(trois.texte, new RegExp(`- Xavier Huit : espace ouvert il y a 4 jours, ni photo ni simulation \\(lien jamais envoyé\\), \\+33614080\\d{3} — SMS \\(LIEN_ESPACE\\) : « Bonjour Xavier, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\\. https://coverswap\\.fr/e/[A-Za-z0-9_-]+ » \\[dossier:${x.dossierId}\\]`));
     const projets = trois.donnees as { dossierId: string; sms: { code: string; telephone: string; texte: string } | null }[];
     const xavier = projets.find((p) => p.dossierId === x.dossierId);
     assert.deepEqual([xavier?.sms?.code, xavier?.sms?.telephone], ["LIEN_ESPACE", (await leadDe(x.leadId)).telephone]);
@@ -313,7 +313,7 @@ describe("lister ESPACES filtré (ex-« espaces_clients ») : les espaces sans p
     await prisma.dossierEvenement.update({ where: { id: trace.id }, data: { createdAt: LUNDI } });
     assert.doesNotMatch((await appeler("lister", { liste: "ESPACES", filtres: { sans_photo_ni_simulation_depuis_jours: 3 } })).texte, /Xavier Huit/, "le lien vient de partir");
     const plusTard = await appeler("lister", { liste: "ESPACES", filtres: { sans_photo_ni_simulation_depuis_jours: 3 } }, dans(10));
-    assert.match(plusTard.texte, new RegExp(`- Xavier Huit : espace ouvert il y a 14 jours, ni photo ni simulation, \\+33614080\\d{3} — SMS \\(LIEN_ESPACE_RAPPEL\\) : « Bonjour Xavier, c'est Lucas de CoverSwap\\. Voici à nouveau le lien de votre espace, tout votre projet y est à jour : https://coverswap\\.fr/e/[A-Za-z0-9_-]+ » \\[dossier:${x.dossierId}\\]`));
+    assert.match(plusTard.texte, new RegExp(`- Xavier Huit : espace ouvert il y a 14 jours, ni photo ni simulation, \\+33614080\\d{3} — SMS \\(LIEN_ESPACE_RAPPEL\\) : « Bonjour Xavier, voici à nouveau le lien de votre espace, tout votre projet y est à jour : https://coverswap\\.fr/e/[A-Za-z0-9_-]+ » \\[dossier:${x.dossierId}\\]`));
     assert.match((await appeler("lister", { liste: "RELANCES" }, dans(10))).texte, /Xavier Huit : espace ouvert il y a 14 jours, ni photo ni simulation — relance photos n° 2\. SMS \(LIEN_ESPACE_RAPPEL\)/);
 
     // La 2ᵉ, avec un texte modifié sans le lien : comptée quand même (le code dit la relance) ; ensuite plus rien à proposer.
@@ -340,9 +340,9 @@ describe("etat_crm PARAMETRES / modifier MODELE_SMS (ex-« voir_parametres » / 
     const sms = await appeler("etat_crm", { partie: "PARAMETRES", groupe: "SMS" });
     assert.match(sms.texte, /^Catalogue SMS \(Paramètres → SMS ; un texte se change par « modifier » MODELE_SMS \(code, texte\)/);
     assert.match(sms.texte, /\nAutomatiques :\n- ACCUSE_RECEPTION — Accusé de réception \(automatique, en journée\) : « Bonjour \{prenom\}, Lucas de CoverSwap\./);
-    assert.match(sms.texte, /\nAprès un appel :\n- PAS_DE_REPONSE_SIMULATION — A — Pas de réponse \(simulation du site\) : « Bonjour, c'est Lucas de CoverSwap\. J'ai essayé de vous joindre au sujet de votre simulation\. Je vous rappelle \{quand\}, ou dites-moi le moment qui vous arrange\. »\n- PAS_DE_REPONSE — /);
-    assert.match(sms.texte, /\nEspace client :\n- LIEN_ESPACE — Lien de l'espace \(premier envoi\) : « Bonjour \{prenom\}, c'est Lucas de CoverSwap\. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\. \{lien\} »/);
-    assert.match(sms.texte, /\nRelances :\n- RELANCE_DEVIS_1 — Relance du devis \(1re\) : « Bonjour, c'est Lucas de CoverSwap\. Avez-vous pu regarder votre devis \?/);
+    assert.match(sms.texte, /\nAprès un appel :\n- PAS_DE_REPONSE_SIMULATION — A — Pas de réponse \(simulation du site\) : « Bonjour, j'ai essayé de vous joindre au sujet de votre simulation\. Je vous rappelle \{quand\}, ou dites-moi le moment qui vous arrange\. »\n- PAS_DE_REPONSE — /);
+    assert.match(sms.texte, /\nEspace client :\n- LIEN_ESPACE — Lien de l'espace \(premier envoi\) : « Bonjour \{prenom\}, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\. \{lien\} »/);
+    assert.match(sms.texte, /\nRelances :\n- RELANCE_DEVIS_1 — Relance du devis \(1re\) : « Bonjour, avez-vous pu regarder votre devis \?/);
     assert.doesNotMatch(sms.texte, /TRESORERIE_RESERVE|Numérotation|Automatismes \(|Solde OpenAI/);
     // Mission 18 (A4) : 16 codes — DEMANDE_AVIS et REACTIVATION rejoignent les relances.
     assert.equal((sms.donnees as { sms: unknown[] }).sms.length, 16);
@@ -360,12 +360,12 @@ describe("etat_crm PARAMETRES / modifier MODELE_SMS (ex-« voir_parametres » / 
     const avant = (await modeles.texteDuCatalogue("A_RAPPELER", { quand: "{quand}" }));
     const entree = { entite: "MODELE_SMS", id: "A_RAPPELER", champs: { texte: "Merci ! Je vous rappelle {quand}. Lucas, CoverSwap." }, commande: "Change le SMS à rappeler" };
     const apercu = await appeler("modifier", entree);
-    assert.match(apercu.texte, /^Je vais modifier le SMS A_RAPPELER \([^)]*\) : le texte passe de « Merci pour votre réponse ! C'est noté, je vous rappelle \{quand\}\. À très vite, Lucas de CoverSwap\. » à « Merci ! Je vous rappelle \{quand\}\. Lucas, CoverSwap\. »\.\nIl vaudra pour les prochains SMS ; ceux déjà copiés ne changent pas\.\n\nRien n'a été fait\./);
+    assert.match(apercu.texte, /^Je vais modifier le SMS A_RAPPELER \([^)]*\) : le texte passe de « Merci pour votre réponse ! C'est noté, je vous rappelle \{quand\}\. À très vite ! » à « Merci ! Je vous rappelle \{quand\}\. Lucas, CoverSwap\. »\.\nIl vaudra pour les prochains SMS ; ceux déjà copiés ne changent pas\.\n\nRien n'a été fait\./);
     const jeton = jetonDe(apercu.texte);
     assert.ok(jeton, apercu.texte);
     assert.equal(await modeles.texteDuCatalogue("A_RAPPELER", { quand: "{quand}" }), avant, "l'aperçu n'écrit rien");
     const fait = await appeler("modifier", { ...entree, confirmation: jeton });
-    assert.match(fait.texte, /^Modifié sur le SMS A_RAPPELER \([^)]*\) : le texte passe de « Merci pour votre réponse ! C'est noté, je vous rappelle \{quand\}\. À très vite, Lucas de CoverSwap\. » à « Merci ! Je vous rappelle \{quand\}\. Lucas, CoverSwap\. »\.\nPour défaire : « annuler_modification »/);
+    assert.match(fait.texte, /^Modifié sur le SMS A_RAPPELER \([^)]*\) : le texte passe de « Merci pour votre réponse ! C'est noté, je vous rappelle \{quand\}\. À très vite ! » à « Merci ! Je vous rappelle \{quand\}\. Lucas, CoverSwap\. »\.\nPour défaire : « annuler_modification »/);
     assert.equal(await modeles.texteDuCatalogue("A_RAPPELER", { quand: "demain vers 10 h" }), "Merci ! Je vous rappelle demain vers 10 h. Lucas, CoverSwap.");
     assert.match((await appeler("etat_crm", { partie: "PARAMETRES", groupe: "SMS" })).texte, /- A_RAPPELER — B — À rappeler : « Merci ! Je vous rappelle \{quand\}\. Lucas, CoverSwap\. »/);
     // Le SMS proposé par la fin d'appel suit.
@@ -376,7 +376,7 @@ describe("etat_crm PARAMETRES / modifier MODELE_SMS (ex-« voir_parametres » / 
     const milieu = await appeler("modifier", { entite: "MODELE_SMS", id: "LIEN_ESPACE", champs: { texte: "Bonjour {prenom}, votre espace : {lien} À bientôt." } });
     assert.equal(milieu.texte, "Refusé : Texte SMS LIEN_ESPACE refusé : Le lien doit rester à la fin du message.");
     assert.equal(jetonDe(milieu.texte), null, "aucun jeton : rien à confirmer");
-    assert.match(await modeles.texteDuCatalogue("LIEN_ESPACE", { prenom: "X", lien: "L" }), /^Bonjour X, c'est Lucas de CoverSwap\. Comme convenu/);
+    assert.match(await modeles.texteDuCatalogue("LIEN_ESPACE", { prenom: "X", lien: "L" }), /^Bonjour X, comme convenu/);
     const inconnue = await appeler("modifier", { entite: "MODELE_SMS", id: "PAS_DE_REPONSE", champs: { texte: "Bonjour {prénom}, je vous rappelle {quand}." } });
     assert.match(inconnue.texte, /^Refusé : Texte SMS PAS_DE_REPONSE refusé : Variable non permise : \{prénom\}\./);
 

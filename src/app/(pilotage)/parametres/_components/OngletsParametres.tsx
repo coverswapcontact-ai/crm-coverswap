@@ -7,6 +7,7 @@ import type { VueAccesAssistant, VueConsignesAssistant } from "@/lib/assistant/v
 import type { CompteurVue } from "@/lib/dossiers/compteurs";
 import type { PresetVue } from "@/lib/dossiers/types";
 import type { ReglagesMailVue } from "@/lib/mail/reglages-vue";
+import type { MessageDeLaListe } from "@/lib/messagerie/modeles";
 import type { GroupeParametre, ParametreVue } from "@/lib/parametres/definitions";
 import { cn } from "@/lib/utils";
 import AssistantClaude from "./AssistantClaude";
@@ -15,6 +16,7 @@ import GroupesParametres from "./EcranParametres";
 import { GestionTarifs } from "./GestionTarifs";
 import MarqueEspace from "./MarqueEspace";
 import MessagerieSms, { type ReponseSms } from "./MessagerieSms";
+import MessagesDeLaListe from "./MessagesDeLaListe";
 import Numerotation from "./Numerotation";
 import ReglagesMail from "./ReglagesMail";
 import SectionSysteme from "./SectionSysteme";
@@ -37,6 +39,10 @@ import SectionSysteme from "./SectionSysteme";
  * des devis et le tarif de chaque prestation, qui étaient un sous-mode du
  * générateur de Dossiers) : /parametres?section=tarifs ou #tarifs. Les presets
  * sont lus par la page et gardés ici, comme les paramètres.
+ *
+ * Mission 25 (lot 3) : l'onglet SMS commence par la messagerie (mode d'envoi,
+ * pause, lien d'avis), puis les 41 messages de la liste (textes et modes), puis
+ * les SMS de l'écran SMS ; #messagerie et #messages ouvrent cet onglet.
  */
 
 type Onglet = "activite" | "facturation" | "tarifs" | "mail" | "sms" | "assistant" | "systeme";
@@ -51,7 +57,7 @@ const ONGLETS: { valeur: Onglet; libelle: string }[] = [
 ];
 const CLE_MEMOIRE = "parametres-onglet";
 // Les groupes de l'onglet Activité ont chacun leur ancre (`id` posé par GroupesParametres) : `/parametres#simulateur` depuis le banc.
-const ANCRES: Record<string, Onglet> = { activite: "activite", pilotage: "activite", commercial: "activite", publicite: "activite", simulateur: "activite", rgpd: "activite", connexions: "activite", facturation: "facturation", numerotation: "facturation", tarifs: "tarifs", mail: "mail", sms: "sms", assistant: "assistant", systeme: "systeme", "taches-de-fond": "systeme", coherence: "systeme", audit: "systeme", sessions: "systeme" };
+const ANCRES: Record<string, Onglet> = { activite: "activite", pilotage: "activite", commercial: "activite", publicite: "activite", simulateur: "activite", rgpd: "activite", connexions: "activite", facturation: "facturation", numerotation: "facturation", tarifs: "tarifs", mail: "mail", sms: "sms", messagerie: "sms", messages: "sms", assistant: "assistant", systeme: "systeme", "taches-de-fond": "systeme", coherence: "systeme", audit: "systeme", sessions: "systeme" };
 /** L'onglet d'une ancre ou d'une section (propriétés propres seulement : « toString » n'est pas un onglet). */
 const ongletDe = (nom: string | null): Onglet | null => (nom && Object.prototype.hasOwnProperty.call(ANCRES, nom) ? ANCRES[nom] : null);
 const GROUPES_ACTIVITE: readonly GroupeParametre[] = ["PILOTAGE", "COMMERCIAL", "PUBLICITE", "SIMULATEUR", "RGPD"];
@@ -81,6 +87,7 @@ export default function OngletsParametres({
   retour,
   mail,
   sms,
+  messagesListe,
   acces,
   consignes,
   compteurs,
@@ -92,6 +99,8 @@ export default function OngletsParametres({
   retour: { google: string | null; compte: string | null; message: string | null };
   mail: ReglagesMailVue;
   sms: ReponseSms;
+  /** Mission 25 : les 41 messages de la messagerie, textes et modes. */
+  messagesListe: MessageDeLaListe[];
   acces: VueAccesAssistant;
   consignes: VueConsignesAssistant;
   compteurs: CompteurVue[];
@@ -129,7 +138,8 @@ export default function OngletsParametres({
     }
   }
 
-  const aRenseigner = parametres.filter((p) => !p.courante && p.groupe !== "AGENT" && !GROUPES_AVANCES.includes(p.groupe)).length;
+  // La messagerie a ses valeurs par défaut (Manuel, active) : rien n'y est « à renseigner ».
+  const aRenseigner = parametres.filter((p) => !p.courante && p.groupe !== "AGENT" && p.groupe !== "MESSAGERIE" && !GROUPES_AVANCES.includes(p.groupe)).length;
   const avancesARenseigner = parametres.filter((p) => !p.courante && GROUPES_AVANCES.includes(p.groupe)).length;
 
   return (
@@ -184,7 +194,13 @@ export default function OngletsParametres({
 
       {onglet === "tarifs" ? <GestionTarifs presets={presets} setPresets={setPresets} /> : null}
       {onglet === "mail" ? <ReglagesMail initial={mail} /> : null}
-      {onglet === "sms" ? <MessagerieSms initial={sms} /> : null}
+      {onglet === "sms" ? (
+        <>
+          <GroupesParametres parametres={parametres} groupes={["MESSAGERIE"]} onMisAJour={setParametres} />
+          <MessagesDeLaListe initial={messagesListe} />
+          <MessagerieSms initial={sms} />
+        </>
+      ) : null}
       {onglet === "assistant" ? (
         <>
           <AssistantClaude initialAcces={acces} initialConsignes={consignes} />

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartLine, CircleCheck, FolderKanban, Globe, Mail, Menu, SlidersHorizontal, Sun, Undo2, Users, Wallet, WandSparkles, X, type LucideIcon } from "lucide-react";
+import { ChartLine, CircleCheck, FolderKanban, Globe, Mail, Menu, MessagesSquare, SlidersHorizontal, Sun, Undo2, Users, Wallet, WandSparkles, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { libelleDansPlus } from "@/lib/v2/plus";
@@ -36,6 +36,7 @@ export const ENTREES: readonly EntreeV2[] = [
 ];
 
 export const DANS_PLUS: readonly EntreeV2[] = [
+  { href: "/messagerie", libelle: "Messagerie", icone: MessagesSquare },
   { href: "/mail", libelle: "Boîte mail", icone: Mail },
   { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
   { href: "/site", libelle: "Site", icone: Globe },

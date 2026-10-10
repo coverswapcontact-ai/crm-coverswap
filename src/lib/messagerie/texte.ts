@@ -74,7 +74,8 @@ export type ValeursMessage = Partial<Record<VariableMessage, string | null>>;
 export function remplirTexte(texte: string, valeurs: ValeursMessage, piece: Piece): { texte: string; manquantes: VariableMessage[] } {
   let t = texte;
   if (!piece.connue) t = t.replace(/projet de \{piece\}/g, "projet de rénovation");
-  if (!piece.feminin) t = t.replace(/\{piece\} rénovée/g, "{piece} rénové").replace(/nouvelle \{piece\}/g, "nouveau {piece}");
+  // « nouvel intérieur », « nouveau local » : devant une voyelle, nouvel.
+  if (!piece.feminin) t = t.replace(/\{piece\} rénovée/g, "{piece} rénové").replace(/nouvelle \{piece\}/g, /^[aeiouyàâéèêëîïôûüh]/i.test(piece.nom) ? "nouvel {piece}" : "nouveau {piece}");
   const manquantes: VariableMessage[] = [];
   const rempli = t
     .replace(/\{(\w+)\}/g, (_tout, nom: string) => {

@@ -10,6 +10,7 @@ import { reglagesMail } from "@/lib/mail/reglages-vue";
 import { etatAgentMail } from "@/lib/messages/consultation";
 import { parametresPourEcran } from "@/lib/parametres/service";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
+import { listerMessagesDeLaListe } from "@/lib/messagerie/modeles";
 import { listerCatalogue } from "@/lib/sms/modeles";
 import OngletsParametres from "./_components/OngletsParametres";
 
@@ -25,10 +26,11 @@ export const dynamic = "force-dynamic";
 // tous les dossiers : il ne ralentit pas la page). `?section=systeme` (où mène /taches-de-fond) ouvre cet onglet.
 // Mission 18 (A6) : les tarifs des devis (presets) sont lus avec le reste, pour l'onglet Tarifs (`?section=tarifs`).
 // Mission 22 (A5) : en v2 (`interfaceCourante()`), le même écran v1 sous l'en-tête v2 « Réglages » ; en v1 rien ne change.
+// Mission 25 (lot 3) : l'onglet SMS lit aussi les 41 messages de la messagerie (textes et modes).
 export default async function ParametresPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const parametres = await searchParams;
   const texte = (cle: string) => (typeof parametres[cle] === "string" ? (parametres[cle] as string) : null);
-  const [initiaux, google, drive, agent, mail, modeles, acces, consignes, compteurs, presets, v] = await Promise.all([
+  const [initiaux, google, drive, agent, mail, modeles, acces, consignes, compteurs, presets, v, liste] = await Promise.all([
     parametresPourEcran(),
     etatConnexionGoogle(),
     etatMiroir(),
@@ -40,6 +42,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
     lireCompteurs(),
     listerPresets(),
     interfaceCourante(),
+    listerMessagesDeLaListe(),
   ]);
   const ecran = (
     <OngletsParametres
@@ -48,6 +51,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
       retour={{ google: texte("google"), compte: texte("compte"), message: texte("message") }}
       mail={mail}
       sms={{ modeles, fournisseur: etatFournisseur() }}
+      messagesListe={liste}
       acces={acces}
       consignes={consignes}
       compteurs={compteurs}

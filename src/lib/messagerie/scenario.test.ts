@@ -105,7 +105,11 @@ describe("Mission 25 — le scénario « Démo Messagerie »", () => {
     assert.equal(a1.statut, "A_ENVOYER");
     assert.equal(a1.canal, "SMS");
     assert.equal(a1.destinataire, "+33639980018");
-    assert.match(a1.texte, /^Bonjour Camille, Lucas de CoverSwap\. Merci pour votre demande ! Je vous appelle dans la journée\. Pour gagner du temps, envoyez-moi 2 ou 3 photos de votre cuisine en réponse à ce message\. STOP pour ne plus recevoir nos SMS\.$/);
+    assert.equal(a1.texte, "Bonjour Camille, Lucas de CoverSwap. Merci pour votre demande ! Je vous appelle dans la journée. Pour gagner du temps, envoyez-moi 2 ou 3 photos de votre cuisine en réponse à ce message.");
+    // Premier SMS à ce numéro : la mention STOP s'ajoute à l'envoi (et à l'écran), pas au texte préparé.
+    const vues = await import("./vues");
+    assert.ok((await vues.premiersSms([suiviId])).has(suiviId));
+    assert.match(vues.texteAEnvoyer(a1, true), / STOP pour ne plus recevoir nos SMS\.$/);
     assert.ok(recues.some((r) => r.titre === "Message prêt pour Camille Démo" && r.chemin === `/messagerie?message=${a1.id}`));
     const ouEnEst = await ouEnEstDe(suiviId);
     assert.match(ouEnEst.situation, /^Lead du \d\d\/\d\d \(Meta\), pas encore appelé\.$/);
@@ -119,7 +123,11 @@ describe("Mission 25 — le scénario « Démo Messagerie »", () => {
     const a1 = (await dernier(suiviId, "A1"))!;
     avancer(3);
     await gestes.confirmerEnvoi(a1.id, {}, horloge);
-    assert.equal((await prisma.messagePrepare.findUniqueOrThrow({ where: { id: a1.id } })).statut, "ENVOYE");
+    const envoye = await prisma.messagePrepare.findUniqueOrThrow({ where: { id: a1.id } });
+    assert.equal(envoye.statut, "ENVOYE");
+    assert.match(envoye.texteEnvoye ?? "", / STOP pour ne plus recevoir nos SMS\.$/, "le premier SMS parti porte la mention STOP");
+    const vues = await import("./vues");
+    assert.ok(!(await vues.premiersSms([suiviId])).has(suiviId), "le suivant ne la portera pas");
     assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: leadId } })).dernierContactLe, null, "A1 n'est pas un contact");
     await uneLigneDePlus("A1 envoyé");
   });

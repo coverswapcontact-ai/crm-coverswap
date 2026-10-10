@@ -175,13 +175,14 @@ describe("les outils de l'assistant mènent à l'onglet Tarifs", () => {
   });
 });
 
-describe("navigation à 10 onglets", () => {
-  test("principaux Tâches, Leads, Dossiers, Mail, Clients, Analytique ; secondaires Simulateur, Site, Finances, Paramètres", async () => {
+// Mission 25 (10/10/2026) : la Messagerie entre en deuxième (11 onglets), dans la barre du bas ; Analytique passe dans « Plus ».
+describe("navigation à 11 onglets (mission 25 : la Messagerie)", () => {
+  test("principaux Tâches, Messagerie, Leads, Dossiers, Mail, Clients, Analytique ; secondaires Simulateur, Site, Finances, Paramètres", async () => {
     const navigation = await import("@/components/pilotage/Navigation");
     const libelles = (entrees: { libelle: string }[]) => entrees.map((e) => e.libelle);
-    assert.deepEqual(libelles(navigation.PRINCIPALES), ["Tâches", "Leads", "Dossiers", "Mail", "Clients", "Analytique"]);
+    assert.deepEqual(libelles(navigation.PRINCIPALES), ["Tâches", "Messagerie", "Leads", "Dossiers", "Mail", "Clients", "Analytique"]);
     assert.deepEqual(libelles(navigation.SECONDAIRES), ["Simulateur", "Site", "Finances", "Paramètres"]);
-    assert.equal(navigation.PRINCIPALES.length + navigation.SECONDAIRES.length, 10);
+    assert.equal(navigation.PRINCIPALES.length + navigation.SECONDAIRES.length, 11);
     // Chaque onglet mène à un écran qui existe, et à aucun écran retiré.
     for (const entree of [...navigation.PRINCIPALES, ...navigation.SECONDAIRES]) {
       assert.ok(existsSync(path.join(RACINE, "src/app/(pilotage)", entree.href, "page.tsx")), entree.href);
@@ -190,11 +191,11 @@ describe("navigation à 10 onglets", () => {
     assert.deepEqual(navigation.SECONDAIRES.find((e) => e.href === "/finances")?.aussi, ["/depenses/nouvelle"], "la saisie d'une dépense allume Finances");
   });
 
-  test("barre du bas : Tâches, Leads, Dossiers, Mail, Analytique, puis « Plus » (Clients, Simulateur, Site, Finances, Paramètres)", async () => {
+  test("barre du bas : Tâches, Messagerie, Leads, Dossiers, Mail, puis « Plus » (Clients, Analytique, Simulateur, Site, Finances, Paramètres)", async () => {
     const navigation = await import("@/components/pilotage/Navigation");
-    assert.deepEqual(navigation.PRINCIPALES.filter((e) => e.mobile).map((e) => e.libelle), ["Tâches", "Leads", "Dossiers", "Mail", "Analytique"]);
+    assert.deepEqual(navigation.PRINCIPALES.filter((e) => e.mobile).map((e) => e.libelle), ["Tâches", "Messagerie", "Leads", "Dossiers", "Mail"]);
     assert.ok(!navigation.SECONDAIRES.some((e) => e.mobile), "un écran secondaire n'est jamais dans la barre du bas");
-    assert.deepEqual(navigation.DANS_LE_MENU.map((e) => e.libelle), ["Clients", "Simulateur", "Site", "Finances", "Paramètres"]);
+    assert.deepEqual(navigation.DANS_LE_MENU.map((e) => e.libelle), ["Clients", "Analytique", "Simulateur", "Site", "Finances", "Paramètres"]);
     const source = lire("src/components/pilotage/Navigation.tsx");
     assert.match(source, /gridTemplateColumns: `repeat\(\$\{PRINCIPALES\.filter\(\(entree\) => entree\.mobile\)\.length \+ 1\}/, "la grille suit le nombre d'entrées (5 + Plus)");
     assert.doesNotMatch(source, /\b(Smartphone|Workflow|Receipt)\b/, "plus d'icône des onglets retirés");

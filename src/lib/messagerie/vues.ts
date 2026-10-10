@@ -14,6 +14,7 @@ import { instantParis, jourSuivant, momentParis } from "./horaires";
 import { libelleDuCode } from "./redaction";
 import { DEBUT_CAMPAGNE } from "./suivis";
 import { lireFaits, lireOuEnEst, type OuEnEst } from "./types";
+import { avecMentionStop } from "@/lib/sms/texte";
 
 export const FILTRES_CONVERSATIONS = ["TOUS", "NON_LUS", "A_ENVOYER", "A_TOI", "ATTENTE_CLIENT", "ARCHIVES"] as const;
 export type FiltreConversations = (typeof FILTRES_CONVERSATIONS)[number];
@@ -54,6 +55,29 @@ export async function avecImages<T extends MessageVue>(vues: T[]): Promise<T[]> 
   return vues.map((v) => (v.simulationId && chemin.get(v.simulationId) ? { ...v, image: `/api/uploads/${chemin.get(v.simulationId)}` } : v));
 }
 
+/**
+ * Les suivis dont le prochain SMS sera le PREMIER envoyé à ce numéro (il portera « STOP pour ne plus recevoir nos SMS. ») :
+ * aucun SMS de la messagerie confirmé, aucun SMS parti par le fournisseur ni copié d'un autre écran.
+ */
+export async function premiersSms(suiviIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(suiviIds)];
+  if (!ids.length) return new Set();
+  const suivis = await prisma.suivi.findMany({ where: { ...AVEC_ARCHIVES, id: { in: ids } }, select: { id: true, telephone: true, dossierId: true, leadId: true } });
+  const envoyes = new Set((await prisma.messagePrepare.findMany({ where: { ...AVEC_ARCHIVES, suiviId: { in: ids }, canal: "SMS", statut: "ENVOYE" }, select: { suiviId: true } })).map((m) => m.suiviId));
+  const numeros = suivis.map((s) => s.telephone).filter((n): n is string => Boolean(n));
+  const conversations = numeros.length ? await prisma.conversationSms.findMany({ where: { ...AVEC_ARCHIVES, numero: { in: numeros } }, select: { numero: true, premierEnvoiLe: true } }) : [];
+  const dejaEcrit = new Set(conversations.filter((c) => c.premierEnvoiLe).map((c) => c.numero));
+  const dossierIds = suivis.map((s) => s.dossierId).filter((d): d is string => Boolean(d));
+  const copies = dossierIds.length ? new Set((await prisma.dossierEvenement.findMany({ where: { dossierId: { in: dossierIds }, type: { in: ["SMS_COPIE", "SMS_ENVOYE"] } }, select: { dossierId: true } })).map((e) => e.dossierId)) : new Set<string>();
+  return new Set(suivis.filter((s) => !envoyes.has(s.id) && !(s.telephone && dejaEcrit.has(s.telephone)) && !(s.dossierId && copies.has(s.dossierId))).map((s) => s.id));
+}
+
+/** Le texte tel qu'il partira : avec la mention STOP s'il est le premier SMS à ce numéro. */
+export function texteAEnvoyer(m: { canal: string; texte: string; texteEnvoye?: string | null; statut: string }, premier: boolean): string {
+  if (m.texteEnvoye) return m.texteEnvoye;
+  return m.canal === "SMS" && premier && m.statut !== "ENVOYE" ? avecMentionStop(m.texte) : m.texte;
+}
+
 export function vueDuMessage(m: {
   id: string;
   suiviId: string;
@@ -74,7 +98,7 @@ export function vueDuMessage(m: {
   ouvertLe: Date | null;
   ia: boolean;
   simulationId: string | null;
-}): MessageVue {
+}, premier = false): MessageVue {
   const groupe = estCodeMessage(m.code) ? definitionMessage(m.code as CodeMessage).groupe : null;
   return {
     id: m.id,
@@ -83,7 +107,7 @@ export function vueDuMessage(m: {
     libelle: libelleDuCode(m.code),
     canal: m.canal as MessageVue["canal"],
     destinataire: m.destinataire,
-    texte: m.texteEnvoye ?? m.texte,
+    texte: texteAEnvoyer(m, premier),
     statut: m.statut,
     prevuLe: m.prevuLe.toISOString(),
     envoyeLe: m.envoyeLe?.toISOString() ?? null,
@@ -303,9 +327,10 @@ export async function filDuSuivi(suiviId: string): Promise<ElementFil[]> {
       else if (i.type === "NOTE") elements.push({ genre: "LIGNE", id: `in:${i.id}`, le, texte: `Note : ${i.contenu.split("\n")[0].slice(0, 110)}` });
     }
   }
+  const premier = (await premiersSms([suiviId])).has(suiviId);
   for (const m of messages) {
     if (m.statut === "ENVOYE" && m.envoyeLe) elements.push({ genre: "BULLE", id: `msg:${m.id}`, le: m.envoyeLe.toISOString(), sens: "TOI", canal: m.canal as "SMS" | "MAIL" | "ESPACE", texte: m.texteEnvoye ?? m.texte, code: m.code });
-    else if (["A_ENVOYER", "A_VALIDER", "PREVU"].includes(m.statut)) elements.push({ genre: "PREPARE", id: `msg:${m.id}`, le: (m.statut === "PREVU" ? m.prevuLe : m.createdAt).toISOString(), message: vueDuMessage(m) });
+    else if (["A_ENVOYER", "A_VALIDER", "PREVU"].includes(m.statut)) elements.push({ genre: "PREPARE", id: `msg:${m.id}`, le: (m.statut === "PREVU" ? m.prevuLe : m.createdAt).toISOString(), message: vueDuMessage(m, premier) });
     else if (m.statut === "NON_ENVOYE") elements.push({ genre: "LIGNE", id: `msg:${m.id}`, le: m.updatedAt.toISOString(), texte: `${libelleDuCode(m.code)} non envoyé${m.motif ? ` : ${m.motif.split("|").at(-1)!.toLowerCase()}` : ""}` });
   }
   const prepares = elements.filter((e): e is Extract<ElementFil, { genre: "PREPARE" }> => e.genre === "PREPARE");
@@ -345,6 +370,8 @@ export type CarteUnParUn = {
  */
 export async function fileDuJour(maintenant: Date = new Date()): Promise<{ cartes: CarteUnParUn[]; compteurs: Record<CarteUnParUn["genre"], number>; pause: boolean }> {
   const pause = (await lireParametre("MESSAGERIE_PAUSE", maintenant)) === "EN_PAUSE";
+  const ouvertsTous = await prisma.messagePrepare.findMany({ where: { statut: { in: ["A_ENVOYER", "A_VALIDER"] } }, select: { suiviId: true } });
+  const premiers = await premiersSms(ouvertsTous.map((m) => m.suiviId));
   const finDuJour = instantParis(jourSuivant(momentParis(maintenant).jour), 0);
   const ouverts = await prisma.messagePrepare.findMany({ where: { statut: { in: ["A_ENVOYER", "A_VALIDER"] } }, orderBy: [{ prevuLe: "asc" }] });
   const suivis = await prisma.suivi.findMany({ where: { archiveLe: null } });
@@ -359,7 +386,7 @@ export async function fileDuJour(maintenant: Date = new Date()): Promise<{ carte
     const s = suiviDe.get(m.suiviId);
     if (!s) continue;
     const dernier = await dernierMessageClient(s.id, s.dossierId, s.leadId, s.telephone);
-    cartes.push({ cle: `msg:${m.id}`, genre: "REPONSE", ...base(s), message: vueDuMessage(m), dernierMessageClient: dernier, raison: m.raison ?? "Réponse proposée" });
+    cartes.push({ cle: `msg:${m.id}`, genre: "REPONSE", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: dernier, raison: m.raison ?? "Réponse proposée" });
     dejaPris.add(m.id);
   }
   const dossiersARepondre = await prisma.dossier.findMany({ where: { archiveLe: null, main: "MOI", mainMotif: { startsWith: "Répondre" } }, select: { id: true } });
@@ -377,7 +404,7 @@ export async function fileDuJour(maintenant: Date = new Date()): Promise<{ carte
   for (const m of dus) {
     const s = suiviDe.get(m.suiviId);
     if (!s) continue;
-    cartes.push({ cle: `msg:${m.id}`, genre: "MESSAGE", ...base(s), message: vueDuMessage(m), dernierMessageClient: null, raison: m.nonConfirmeLe ? "Pas confirmé hier : l'avais-tu envoyé ?" : m.raison ?? "" });
+    cartes.push({ cle: `msg:${m.id}`, genre: "MESSAGE", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: null, raison: m.nonConfirmeLe ? "Pas confirmé hier : l'avais-tu envoyé ?" : m.raison ?? "" });
   }
 
   // 3. Les appels à passer : leads de la campagne jamais appelés, rappels du jour, suite « l'appeler ».
@@ -404,7 +431,7 @@ export async function fileDuJour(maintenant: Date = new Date()): Promise<{ carte
   for (const m of ouverts.filter((x) => x.statut === "A_VALIDER")) {
     const s = suiviDe.get(m.suiviId);
     if (!s) continue;
-    cartes.push({ cle: `msg:${m.id}`, genre: "PROPOSITION", ...base(s), message: vueDuMessage(m), dernierMessageClient: null, raison: m.raison ?? "Proposition" });
+    cartes.push({ cle: `msg:${m.id}`, genre: "PROPOSITION", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: null, raison: m.raison ?? "Proposition" });
   }
   for (const s of suivis.filter((x) => /^décider/.test(x.prochaineAction ?? ""))) {
     if (cartes.some((c) => c.suiviId === s.id && c.genre === "PROPOSITION")) continue;

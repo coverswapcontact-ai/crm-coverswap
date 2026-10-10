@@ -99,7 +99,7 @@ describe("pas de réponse", () => {
     assert.deepEqual([premier.cible, premier.rappelLe, premier.tentatives, premier.proposerSansSuite], ["CONTACT", DEMAIN_18, 1, false]);
     assert.equal(premier.resume, "Appel noté. Rappel demain à 18:00.");
     assert.equal(premier.sms?.code, "PAS_DE_REPONSE");
-    assert.equal(premier.sms?.texte, "Bonjour, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange.");
+    assert.equal(premier.sms?.texte, "Bonjour, j'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange.");
     assert.deepEqual([premier.sms?.leadId, premier.sms?.nom], [l.id, "Aline Quatre"]);
     let relu = await leadDe(l.id);
     assert.deepEqual([relu.rappelLe?.toISOString(), relu.statut, relu.tentatives], [DEMAIN_18, "NOUVEAU", 1]);
@@ -139,14 +139,14 @@ describe("à rappeler", () => {
     const datee = await appels.noterAppel({ leadId: date.id, issue: "A_RAPPELER", note: "", rappelLe: JEUDI_10 }, LUNDI);
     assert.deepEqual([datee.rappelLe, datee.tentatives, datee.sms?.code], [JEUDI_10, 0, "A_RAPPELER"]);
     assert.equal(datee.resume, "Appel noté. Rappel jeudi à 10:00.");
-    assert.equal(datee.sms?.texte, "Merci pour votre réponse ! C'est noté, je vous rappelle jeudi vers 10 h. À très vite, Lucas de CoverSwap.");
+    assert.equal(datee.sms?.texte, "Merci pour votre réponse ! C'est noté, je vous rappelle jeudi vers 10 h. À très vite !");
     await appels.noterAppel({ leadId: sansReponse.id, issue: "PAS_DE_REPONSE", note: "" }, LUNDI);
 
     // Sans date : plus de défaut à demain 10 h — et un rappel daté d'avant est retiré (c'est le choix de Lucas).
     const sans = await appels.noterAppel({ leadId: sansDate.id, issue: "A_RAPPELER", note: "Rappellera lui-même" }, LUNDI);
     assert.equal(sans.rappelLe, null);
     assert.equal(sans.resume, "Appel noté. Sans date de rappel : il est dans À rappeler.");
-    assert.equal(sans.sms?.texte, "Merci pour votre réponse ! C'est noté, je vous rappelle prochainement. À très vite, Lucas de CoverSwap.");
+    assert.equal(sans.sms?.texte, "Merci pour votre réponse ! C'est noté, je vous rappelle prochainement. À très vite !");
     assert.deepEqual([(await leadDe(sansDate.id)).rappelLe, (await leadDe(sansDate.id)).statut], [null, "CONTACTE"]);
 
     const ordre = ids(await leads.listerLeads({ vue: "A_RAPPELER", recherche: "Quatre" }, LUNDI)).filter((id) => [date.id, sansDate.id, sansReponse.id].includes(id));
@@ -174,7 +174,7 @@ describe("intéressé", () => {
     assert.ok(await prisma.espaceClient.findUnique({ where: { dossierId: suite.dossierId } }), "son espace est ouvert");
     assert.equal(suite.sms?.code, "LIEN_ESPACE");
     assert.match(suite.sms?.lien ?? "", LIEN);
-    assert.equal(suite.sms?.texte, `Bonjour Helene, c'est Lucas de CoverSwap. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. ${suite.sms?.lien}`);
+    assert.equal(suite.sms?.texte, `Bonjour Helene, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. ${suite.sms?.lien}`);
     assert.equal(suite.sms?.dossierId, suite.dossierId);
 
     const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: suite.dossierId } });
@@ -353,7 +353,7 @@ describe("outil noter_appel", () => {
     await assert.rejects(outil.executer({ leadId: l.id, issue: "PAS_INTERESSE" } as Entree, CONTEXTE_OUTIL), /motif_perte.*DELAI \(délai trop long\).*AUTRE/);
     const resultat = (await outil.executer({ leadId: l.id, issue: "PAS_DE_REPONSE" } as Entree, CONTEXTE_OUTIL)) as { texte: string };
     assert.match(resultat.texte, /^Appel noté\. Rappel demain à 18:00\. \(Ugo Quatre\)/);
-    assert.ok(resultat.texte.includes("SMS proposé (PAS_DE_REPONSE) : « Bonjour, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle demain vers 18 h"), resultat.texte);
+    assert.ok(resultat.texte.includes("SMS proposé (PAS_DE_REPONSE) : « Bonjour, j'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle demain vers 18 h"), resultat.texte);
     assert.ok(!resultat.texte.includes("envoyer_lien_espace"), "plus de mail proposé");
     await outil.executer({ leadId: l.id, issue: "PAS_INTERESSE", motif_perte: "HORS_ZONE" } as Entree, CONTEXTE_OUTIL);
     assert.deepEqual([(await leadDe(l.id)).statut, (await leadDe(l.id)).motifPerte], ["PERDU", "HORS_ZONE"]);

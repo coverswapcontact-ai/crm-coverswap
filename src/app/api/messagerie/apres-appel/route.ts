@@ -5,7 +5,7 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { MOTIFS_PERTE } from "@/lib/dossiers/constants";
 import { ISSUES_APRES_APPEL, apresAppel } from "@/lib/messagerie/gestes";
 import { suiviPour } from "@/lib/messagerie/suivis";
-import { avecImages, vueDuMessage } from "@/lib/messagerie/vues";
+import { avecImages, premiersSms, vueDuMessage } from "@/lib/messagerie/vues";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,7 @@ export async function POST(requete: NextRequest) {
       resume: r.resume ?? "Appel noté.",
       proposerSansSuite: r.proposerSansSuite,
       suiviId: r.suiviId,
-      messagerie: r.proposee ? (await avecImages([vueDuMessage(r.proposee)]))[0] : null,
+      messagerie: r.proposee ? (await avecImages([vueDuMessage(r.proposee, (await premiersSms([r.proposee.suiviId])).has(r.proposee.suiviId))]))[0] : null,
     });
   } catch (erreur) {
     return reponseErreur(erreur, "POST /api/messagerie/apres-appel");

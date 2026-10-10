@@ -176,7 +176,7 @@ describe("demande d'avis après chantier : un type de relance", () => {
     assert.ok(a);
     assert.deepEqual([a.rang, a.relancesFaites, a.mailParti, a.joursDepuisFin, a.espaceId], [1, 0, false, 8, pret.espaceId]);
     assert.equal(a.sms?.code, "DEMANDE_AVIS");
-    assert.match(a.sms!.texte, /^Bonjour Avispret, c'est Lucas de CoverSwap\. Merci encore pour votre confiance\. Si le résultat vous plaît, votre avis nous aide beaucoup : il se donne en un clic depuis votre espace : https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+#apres$/);
+    assert.match(a.sms!.texte, /^Bonjour Avispret, merci encore pour votre confiance\. Si le résultat vous plaît, votre avis nous aide beaucoup : il se donne en un clic depuis votre espace : https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+#apres$/);
     assert.deepEqual(a.sms?.relance, { type: "AVIS", rang: 1 });
 
     const note = await copie.noterSmsCopie({ code: a.sms!.code, texte: a.sms!.texte, dossierId: pret.dossierId, relance: a.sms!.relance, origine: "ECRAN" });
@@ -244,7 +244,7 @@ describe("réactivation à 6 mois : un type de relance, avec l'accord du contact
     assert.ok(r);
     assert.deepEqual([r.rang, r.joursDepuisPerte, r.nom, r.clientId], [1, 200, "Denis Perdu", denis.clientId]);
     assert.equal(r.sms?.code, "REACTIVATION");
-    assert.equal(r.sms?.texte, "Bonjour Denis, c'est Lucas de CoverSwap. Où en est votre projet de rénovation ? S'il est toujours d'actualité, répondez-moi ici. STOP pour ne plus en recevoir.");
+    assert.equal(r.sms?.texte, "Bonjour Denis, où en est votre projet de rénovation ? S'il est toujours d'actualité, répondez-moi ici. STOP pour ne plus en recevoir.");
     assert.equal(r.sms?.lien, undefined);
     assert.deepEqual(r.sms?.relance, { type: "REACTIVATION", rang: 1 });
 

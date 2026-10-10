@@ -88,3 +88,24 @@ groupe IA : `IA_MESSAGERIE` (interrupteur), `IA_MESSAGERIE_BUDGET` (10 € sans 
 - **Ancien circuit** : l'accusé par le fournisseur est remplacé par A1 (`envoyerAccuseParFournisseur` gardé pour le
   lot 8) ; les mails de relance proposés toutes les 6 h ne tournent plus (`estActif: false`) ; les comptes de relances
   d'avant (SMS copiés, mails de relance) comptent dans « trois par étape ».
+- **Mention STOP** : ajoutée au moment d'envoyer le premier SMS à un numéro (`vues.ts › premiersSms`), pas en
+  préparant : trois messages préparés d'avance ne la portent pas tous. Le texte noté comme envoyé la contient.
+- **Dossier « Démo Messagerie »** : créé par un bouton (menu de la Messagerie), pas au déploiement : l'alerte part
+  quand Lucas l'a demandée, après avoir accepté les notifications (recette, points 1 et 2). Recréer la démo archive la
+  précédente. Lead Meta fictif (06 39 98 00 18, Lattes, cuisine) : à archiver après l'essai.
+- **Paramètres → SMS (lot 3)** : un texte modifié qui ne pourrait pas partir juste est refusé (variable que le CRM ne
+  remplit pas pour ce texte, lien retiré, adresse écrite en dur) ; les règles du contrôleur (une question, montant,
+  date, présentation…) sont seulement signalées : Lucas reste l'auteur de ses textes. « Revenir au texte validé » vide
+  la ligne (le texte de la liste s'applique et suit ses corrections futures).
+- **« Désactivé »** vaut dans les deux modes : un message désactivé n'est jamais préparé, et le journal le dit
+  (« … non préparé : désactivé dans Paramètres → SMS »). Une réponse rapide n'a pas de mode.
+- **Anciens SMS de l'écran SMS** : les 13 textes qui se présentaient, et la signature « À très vite, Lucas de
+  CoverSwap » d'A_RAPPELER (règle d'or 9), sont réécrits sans présentation ; en base, seulement là où la ligne porte
+  encore l'ancien texte mot pour mot (migration `sms-sans-presentation-25`). Les deux accusés, remplacés par A1,
+  ne s'affichent plus dans Paramètres (leurs lignes restent).
+- **Réglages par défaut** : Manuel et « Active » sont posés une fois (migration `messagerie-reglages-25`, datés du
+  25/09) pour que Paramètres les montre au lieu de « À renseigner ».
+- **Contrôleur** : les mots se reconnaissent accents compris (« prête » n'est plus pris pour « te ») ; relevé en
+  remplissant les 41 messages pour cinq profils de clients.
+- **Accord de la pièce** : « nouvel intérieur » devant une voyelle, « nouveau local », « nouvelle cuisine ».
+

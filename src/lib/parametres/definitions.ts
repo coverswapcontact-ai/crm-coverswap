@@ -473,6 +473,10 @@ export function formaterValeurParametre(cle: CleParametre, valeur: ValeurParamet
     case "choix":
       return definition.options?.find((option) => option.valeur === valeur)?.libelle ?? String(valeur);
     default:
+      // Mission 25 : un instant posé par le CRM (mise en service de la messagerie) se lit en date et heure de Paris.
+      if (cle === "MESSAGERIE_LANCEMENT" && typeof valeur === "string" && !Number.isNaN(Date.parse(valeur))) {
+        return new Date(valeur).toLocaleString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(" ", " à ");
+      }
       return String(valeur);
   }
 }

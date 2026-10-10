@@ -86,18 +86,18 @@ after(async () => {
 describe("le catalogue : un seul endroit pour les textes", () => {
   test("les textes de Lucas, exacts ; les accusés inchangés ; l'ordre des groupes", () => {
     const texte = (code: string) => catalogue.definitionSms(code)?.defaut;
-    assert.equal(texte("PAS_DE_REPONSE_SIMULATION"), "Bonjour, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre simulation. Je vous rappelle {quand}, ou dites-moi le moment qui vous arrange.");
-    assert.equal(texte("PAS_DE_REPONSE"), "Bonjour, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle {quand}, ou dites-moi le moment qui vous arrange.");
-    assert.equal(texte("PAS_DE_REPONSE_2"), "Bonjour, c'est encore Lucas de CoverSwap. Je n'arrive pas à vous joindre : répondez-moi ici avec un moment qui vous arrange, ou dites-moi simplement si le projet n'est plus d'actualité.");
-    assert.equal(texte("A_RAPPELER"), "Merci pour votre réponse ! C'est noté, je vous rappelle {quand}. À très vite, Lucas de CoverSwap.");
-    assert.equal(texte("LIEN_ESPACE"), "Bonjour {prenom}, c'est Lucas de CoverSwap. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. {lien}");
-    assert.equal(texte("LIEN_ESPACE_SIMULATION"), "Bonjour {prenom}, c'est Lucas de CoverSwap. Comme convenu, votre simulation vous attend dans votre espace personnel, avec la suite de votre projet : {lien}");
-    assert.equal(texte("INJOIGNABLE_LIEN"), "Bonjour {prenom}, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre projet. Votre espace personnel est prêt, vous pouvez y déposer quelques photos quand vous voulez : {lien}");
-    assert.equal(texte("LIEN_ESPACE_RAPPEL"), "Bonjour {prenom}, c'est Lucas de CoverSwap. Voici à nouveau le lien de votre espace, tout votre projet y est à jour : {lien}");
-    assert.equal(texte("LIEN_ESPACE_NOUVEAU"), "Bonjour {prenom}, c'est Lucas de CoverSwap. Voici le nouveau lien de votre espace, l'ancien ne fonctionne plus : {lien}");
-    assert.equal(texte("SIMULATION_PRETE"), "Bonjour {prenom}, c'est Lucas de CoverSwap. Votre simulation est en ligne dans votre espace, dites-moi ce que vous en pensez : {lien}");
-    assert.equal(texte("RELANCE_DEVIS_1"), "Bonjour, c'est Lucas de CoverSwap. Avez-vous pu regarder votre devis ? Il est toujours dans votre espace client. Je reste disponible si vous avez des questions.");
-    assert.equal(texte("RELANCE_DEVIS_2"), "Bonjour, c'est Lucas de CoverSwap. Je reviens vers vous pour votre devis : s'il vous reste une question ou si le projet n'est plus d'actualité, dites-le-moi simplement.");
+    assert.equal(texte("PAS_DE_REPONSE_SIMULATION"), "Bonjour, j'ai essayé de vous joindre au sujet de votre simulation. Je vous rappelle {quand}, ou dites-moi le moment qui vous arrange.");
+    assert.equal(texte("PAS_DE_REPONSE"), "Bonjour, j'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle {quand}, ou dites-moi le moment qui vous arrange.");
+    assert.equal(texte("PAS_DE_REPONSE_2"), "Bonjour, je n'arrive pas à vous joindre : répondez-moi ici avec un moment qui vous arrange, ou dites-moi simplement si le projet n'est plus d'actualité.");
+    assert.equal(texte("A_RAPPELER"), "Merci pour votre réponse ! C'est noté, je vous rappelle {quand}. À très vite !");
+    assert.equal(texte("LIEN_ESPACE"), "Bonjour {prenom}, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. {lien}");
+    assert.equal(texte("LIEN_ESPACE_SIMULATION"), "Bonjour {prenom}, comme convenu, votre simulation vous attend dans votre espace personnel, avec la suite de votre projet : {lien}");
+    assert.equal(texte("INJOIGNABLE_LIEN"), "Bonjour {prenom}, j'ai essayé de vous joindre au sujet de votre projet. Votre espace personnel est prêt, vous pouvez y déposer quelques photos quand vous voulez : {lien}");
+    assert.equal(texte("LIEN_ESPACE_RAPPEL"), "Bonjour {prenom}, voici à nouveau le lien de votre espace, tout votre projet y est à jour : {lien}");
+    assert.equal(texte("LIEN_ESPACE_NOUVEAU"), "Bonjour {prenom}, voici le nouveau lien de votre espace, l'ancien ne fonctionne plus : {lien}");
+    assert.equal(texte("SIMULATION_PRETE"), "Bonjour {prenom}, votre simulation est en ligne dans votre espace, dites-moi ce que vous en pensez : {lien}");
+    assert.equal(texte("RELANCE_DEVIS_1"), "Bonjour, avez-vous pu regarder votre devis ? Il est toujours dans votre espace client. Je reste disponible si vous avez des questions.");
+    assert.equal(texte("RELANCE_DEVIS_2"), "Bonjour, je reviens vers vous pour votre devis : s'il vous reste une question ou si le projet n'est plus d'actualité, dites-le-moi simplement.");
     assert.equal(texte("ACCUSE_RECEPTION"), "Bonjour {prenom}, Lucas de CoverSwap. Merci pour votre demande, je vous appelle dans les prochaines minutes. Ce numéro sert à nos échanges par SMS. STOP pour ne plus en recevoir.");
     assert.equal(texte("ACCUSE_RECEPTION_HORS_HORAIRES"), "Bonjour {prenom}, Lucas de CoverSwap. Merci pour votre demande, je vous appelle dès demain matin. Ce numéro sert à nos échanges par SMS. STOP pour ne plus en recevoir.");
     assert.equal(catalogue.definitionSms("DEVIS_PRET"), null, "archivé, hors du catalogue");
@@ -144,8 +144,8 @@ describe("le catalogue : un seul endroit pour les textes", () => {
     await prisma.modeleSms.update({ where: { id: rappel.id }, data: { actif: true } });
     await modeles.modifierModele(rappel.id, { texte: catalogue.definitionSms("LIEN_ESPACE_RAPPEL")!.defaut });
 
-    assert.equal(await modeles.texteDuCatalogue("LIEN_ESPACE", { prenom: "", lien: "https://coverswap.fr/e/abc" }), "Bonjour, c'est Lucas de CoverSwap. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. https://coverswap.fr/e/abc");
-    assert.equal(await modeles.texteDuCatalogue("A_RAPPELER", { quand: "prochainement" }), "Merci pour votre réponse ! C'est noté, je vous rappelle prochainement. À très vite, Lucas de CoverSwap.");
+    assert.equal(await modeles.texteDuCatalogue("LIEN_ESPACE", { prenom: "", lien: "https://coverswap.fr/e/abc" }), "Bonjour, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. https://coverswap.fr/e/abc");
+    assert.equal(await modeles.texteDuCatalogue("A_RAPPELER", { quand: "prochainement" }), "Merci pour votre réponse ! C'est noté, je vous rappelle prochainement. À très vite !");
     await assert.rejects(modeles.texteDuCatalogue("DEVIS_PRET"), /Code SMS inconnu/);
   });
 
@@ -214,7 +214,7 @@ describe("proposerSms : le SMS prérempli selon l'action et la source du lead", 
     const meta = await lead("Anouk", { tentatives: 1 });
     const p = await proposition.proposerSms({ action: "PAS_DE_REPONSE", leadId: meta.id }, MERCREDI);
     assert.equal(p.code, "PAS_DE_REPONSE");
-    assert.equal(p.texte, "Bonjour, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange.");
+    assert.equal(p.texte, "Bonjour, j'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange.");
     assert.deepEqual([p.nom, p.prenom, p.telephone, p.leadId, p.dossierId, p.lien], ["Anouk Cinq", "Anouk", meta.telephone, meta.id, null, undefined]);
     const date = await proposition.proposerSms({ action: "PAS_DE_REPONSE", leadId: meta.id, rappelLe: quand.aHeureParis(MERCREDI, 2, 10).toISOString() }, MERCREDI);
     assert.match(date.texte, /Je vous rappelle vendredi vers 10 h, ou dites-moi/);
@@ -234,7 +234,7 @@ describe("proposerSms : le SMS prérempli selon l'action et la source du lead", 
     const deuxieme = await lead("Dorian", { tentatives: 2 });
     const d = await proposition.proposerSms({ action: "PAS_DE_REPONSE", leadId: deuxieme.id }, MERCREDI);
     assert.equal(d.code, "PAS_DE_REPONSE_2");
-    assert.match(d.texte, /^Bonjour, c'est encore Lucas de CoverSwap\. Je n'arrive pas à vous joindre/);
+    assert.match(d.texte, /^Bonjour, je n'arrive pas à vous joindre/);
     assert.equal((await proposition.proposerSms({ action: "PAS_DE_REPONSE", leadId: site.id, tentatives: 3 }, MERCREDI)).code, "PAS_DE_REPONSE_2", "les tentatives données par la fin d'appel l'emportent");
   });
 
@@ -242,9 +242,9 @@ describe("proposerSms : le SMS prérempli selon l'action et la source du lead", 
     const l = await lead("Eloi");
     const sans = await proposition.proposerSms({ action: "A_RAPPELER", leadId: l.id }, LUNDI);
     assert.equal(sans.code, "A_RAPPELER");
-    assert.equal(sans.texte, "Merci pour votre réponse ! C'est noté, je vous rappelle prochainement. À très vite, Lucas de CoverSwap.");
+    assert.equal(sans.texte, "Merci pour votre réponse ! C'est noté, je vous rappelle prochainement. À très vite !");
     const jeudi = await proposition.proposerSms({ action: "A_RAPPELER", leadId: l.id, rappelLe: "2026-10-01T08:00:00.000Z" }, LUNDI);
-    assert.equal(jeudi.texte, "Merci pour votre réponse ! C'est noté, je vous rappelle jeudi vers 10 h. À très vite, Lucas de CoverSwap.");
+    assert.equal(jeudi.texte, "Merci pour votre réponse ! C'est noté, je vous rappelle jeudi vers 10 h. À très vite !");
   });
 
   test("intéressé : LIEN_ESPACE_SIMULATION seulement si sa simulation est déjà dans l'espace ; espace ouvert, aucun événement de SMS écrit", async () => {
@@ -254,7 +254,7 @@ describe("proposerSms : le SMS prérempli selon l'action et la source du lead", 
     const p = await proposition.proposerSms({ action: "INTERESSE", leadId: sansRendu.id }, MERCREDI);
     assert.equal(p.code, "LIEN_ESPACE", "« votre simulation vous attend » serait faux");
     assert.match(p.lien ?? "", LIEN);
-    assert.equal(p.texte, `Bonjour Faustine, c'est Lucas de CoverSwap. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. ${p.lien}`);
+    assert.equal(p.texte, `Bonjour Faustine, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. ${p.lien}`);
     assert.ok(p.dossierId, "le dossier et l'espace sont ouverts");
     assert.ok(await prisma.espaceClient.findUnique({ where: { dossierId: p.dossierId! } }));
     assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: p.dossierId!, type: { in: ["SMS_COPIE", "ESPACE_LIEN_COMMUNIQUE"] } } }), 0);
@@ -265,7 +265,7 @@ describe("proposerSms : le SMS prérempli selon l'action et la source du lead", 
     await prisma.simulation.create({ data: { leadId: c.leadId, dossierId: c.dossierId, source: "SITE_SIMULATEUR", imageAfterPath: "essai/rendu.png", rangeeLe: new Date() } });
     const s = await proposition.proposerSms({ action: "INTERESSE", leadId: c.leadId }, MERCREDI);
     assert.equal(s.code, "LIEN_ESPACE_SIMULATION");
-    assert.equal(s.texte, `Bonjour Fleur, c'est Lucas de CoverSwap. Comme convenu, votre simulation vous attend dans votre espace personnel, avec la suite de votre projet : ${s.lien}`);
+    assert.equal(s.texte, `Bonjour Fleur, comme convenu, votre simulation vous attend dans votre espace personnel, avec la suite de votre projet : ${s.lien}`);
     assert.equal((await proposition.proposerSms({ action: "INTERESSE", leadId: (await lead("Gaspard")).id }, MERCREDI)).code, "LIEN_ESPACE", "lead Meta");
   });
 
@@ -275,7 +275,7 @@ describe("proposerSms : le SMS prérempli selon l'action et la source du lead", 
     await prisma.client.update({ where: { id: d.clientId! }, data: { prenom: "Camille" } });
     const p = await proposition.proposerSms({ action: "LIEN_ESPACE", leadId: c.leadId }, MERCREDI);
     assert.deepEqual([p.prenom, p.nom], ["Camille", "Garnier"]);
-    assert.match(p.texte, /^Bonjour Camille, c'est Lucas de CoverSwap\./);
+    assert.match(p.texte, /^Bonjour Camille, comme convenu, voici votre espace/);
     const assistant = await lienEspace.proposerLienParSms({ dossierId: c.dossierId, code: "LIEN_ESPACE" });
     assert.equal(assistant.prenom, "Camille");
     assert.equal(assistant.sms, p.texte);
@@ -293,7 +293,7 @@ describe("proposerSms : le SMS prérempli selon l'action et la source du lead", 
     const ensuite = await proposition.proposerSms({ action: "ENVOYER_LIEN", leadId: c.leadId }, MERCREDI);
     assert.equal(ensuite.code, "LIEN_ESPACE_RAPPEL");
     assert.equal(ensuite.dossierId, c.dossierId, "le dossier vivant du lead");
-    assert.equal(ensuite.texte, `Bonjour Hortense, c'est Lucas de CoverSwap. Voici à nouveau le lien de votre espace, tout votre projet y est à jour : ${ensuite.lien}`);
+    assert.equal(ensuite.texte, `Bonjour Hortense, voici à nouveau le lien de votre espace, tout votre projet y est à jour : ${ensuite.lien}`);
     assert.equal((await proposition.proposerSms({ action: "RELANCE_PHOTOS", dossierId: c.dossierId }, MERCREDI)).code, "LIEN_ESPACE_RAPPEL");
     assert.equal((await proposition.proposerSms({ action: "INJOIGNABLE_LIEN", dossierId: c.dossierId }, MERCREDI)).code, "INJOIGNABLE_LIEN");
 
@@ -303,7 +303,7 @@ describe("proposerSms : le SMS prérempli selon l'action et la source du lead", 
     const nouveau = await proposition.proposerSms({ action: "ENVOYER_LIEN", dossierId: c.dossierId }, MERCREDI);
     assert.equal(nouveau.code, "LIEN_ESPACE_NOUVEAU");
     assert.notEqual(nouveau.lien, ensuite.lien);
-    assert.equal(nouveau.texte, `Bonjour Hortense, c'est Lucas de CoverSwap. Voici le nouveau lien de votre espace, l'ancien ne fonctionne plus : ${nouveau.lien}`);
+    assert.equal(nouveau.texte, `Bonjour Hortense, voici le nouveau lien de votre espace, l'ancien ne fonctionne plus : ${nouveau.lien}`);
     await copie.noterSmsCopie({ code: nouveau.code, texte: nouveau.texte, dossierId: c.dossierId, origine: "ECRAN" });
     assert.equal((await proposition.proposerSms({ action: "ENVOYER_LIEN", dossierId: c.dossierId }, MERCREDI)).code, "LIEN_ESPACE_RAPPEL");
   });
@@ -372,7 +372,7 @@ describe("copier vaut envoi : noterSmsCopie", () => {
     await prisma.dossierEvenement.create({ data: { dossierId: c.dossierId, type: "ESPACE_MESSAGE", direction: "ENTRANT", contenu: "Message du client : pouvez-vous me rappeler ?" } });
     await main.recalculerMain(c.dossierId);
     assert.equal((await dossierDe(c.dossierId)).mainMotif, `Répondre à ${c.nom}`);
-    const note = await copie.noterSmsCopie({ code: "A_RAPPELER", texte: "Merci pour votre réponse ! C'est noté, je vous rappelle demain vers 18 h. À très vite, Lucas de CoverSwap.", leadId: c.leadId, origine: "ECRAN" });
+    const note = await copie.noterSmsCopie({ code: "A_RAPPELER", texte: "Merci pour votre réponse ! C'est noté, je vous rappelle demain vers 18 h. À très vite !", leadId: c.leadId, origine: "ECRAN" });
     assert.deepEqual([note.cible, note.dossierId, note.lien], ["DOSSIER", c.dossierId, false]);
     const d = await dossierDe(c.dossierId);
     assert.equal(main.estMotifRepondre(d.mainMotif), false, "le SMS copié a répondu");
@@ -404,7 +404,7 @@ describe("copier vaut envoi : noterSmsCopie", () => {
 
   test("lead sans dossier → échange SMS sur le lead, une seule fois ; LIBRE accepté par la route, un code inconnu refusé", async () => {
     const l = await lead("Kylian");
-    const texte = "Bonjour, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange.";
+    const texte = "Bonjour, j'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle demain vers 18 h, ou dites-moi le moment qui vous arrange.";
     const a = await copie.noterSmsCopie({ code: "PAS_DE_REPONSE", texte, leadId: l.id, origine: "ECRAN" });
     const b = await copie.noterSmsCopie({ code: "PAS_DE_REPONSE", texte, leadId: l.id, origine: "ECRAN" });
     assert.deepEqual([a.cible, a.dossierId, b.deja, b.id], ["CONTACT", null, true, a.id]);
@@ -441,23 +441,23 @@ describe("rapatriement : plus aucun texte SMS en dur", () => {
     const site = await lead("Mael", { source: "SITE_SIMULATEUR" });
     const p = await lienEspace.proposerLienParSms({ leadId: site.id, code: "LIEN_ESPACE" });
     assert.equal(p.code, "LIEN_ESPACE");
-    assert.equal(p.sms, `Bonjour Mael, c'est Lucas de CoverSwap. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. ${p.lien}`);
+    assert.equal(p.sms, `Bonjour Mael, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. ${p.lien}`);
     assert.ok(!(await signaux(p.dossierId)).includes("NON_ENVOYE"), "ESPACE_LIEN_COMMUNIQUE compte comme lien envoyé");
     const injoignable = await lienEspace.proposerLienParSms({ dossierId: p.dossierId, code: "INJOIGNABLE_LIEN" });
-    assert.match(injoignable.sms, /^Bonjour Mael, c'est Lucas de CoverSwap\. J'ai essayé de vous joindre au sujet de votre projet\./);
+    assert.match(injoignable.sms, /^Bonjour Mael, j'ai essayé de vous joindre au sujet de votre projet\./);
     // Sa simulation rangée avec son rendu : la variante, comme sur l'écran SMS.
     await prisma.simulation.create({ data: { leadId: site.id, dossierId: p.dossierId, source: "SITE_SIMULATEUR", imageAfterPath: "essai/rendu-mael.png", rangeeLe: new Date() } });
     const variante = await lienEspace.proposerLienParSms({ dossierId: p.dossierId, code: "LIEN_ESPACE" });
     assert.equal(variante.code, "LIEN_ESPACE_SIMULATION");
-    assert.equal(variante.sms, `Bonjour Mael, c'est Lucas de CoverSwap. Comme convenu, votre simulation vous attend dans votre espace personnel, avec la suite de votre projet : ${variante.lien}`);
+    assert.equal(variante.sms, `Bonjour Mael, comme convenu, votre simulation vous attend dans votre espace personnel, avec la suite de votre projet : ${variante.lien}`);
   });
 
   test("nouveau lien (LIEN_ESPACE_NOUVEAU) et simulation en ligne (SIMULATION_PRETE) lisent le catalogue", async () => {
     const c = await contact("Nora");
     const d = await dossierDe(c.dossierId);
-    assert.equal((await gestion.espaceDuClient(d.clientId!)).smsNouveauLien, "Bonjour Nora, c'est Lucas de CoverSwap. Voici le nouveau lien de votre espace, l'ancien ne fonctionne plus : {lien}");
+    assert.equal((await gestion.espaceDuClient(d.clientId!)).smsNouveauLien, "Bonjour Nora, voici le nouveau lien de votre espace, l'ancien ne fonctionne plus : {lien}");
     const publication = await simulations.texteSmsPublication(c.dossierId);
-    assert.match(publication.texte ?? "", /^Bonjour Nora, c'est Lucas de CoverSwap\. Votre simulation est en ligne dans votre espace, dites-moi ce que vous en pensez : https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+$/);
+    assert.match(publication.texte ?? "", /^Bonjour Nora, votre simulation est en ligne dans votre espace, dites-moi ce que vous en pensez : https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_-]+$/);
   });
 });
 

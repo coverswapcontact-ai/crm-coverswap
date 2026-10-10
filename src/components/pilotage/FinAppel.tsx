@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "./client";
 import { viderNotesEnAttente } from "./NotesAppel";
 import { Puces, TRANS } from "./ui";
+import type { MessageVue } from "@/lib/messagerie/vues";
 
 /**
  * Mission 14 (29/09/2026), partie 4 — la feuille de fin d'appel, seule façon de
@@ -26,6 +27,11 @@ import { Puces, TRANS } from "./ui";
  *  - Intéressé : rien à choisir (son dossier et son espace s'ouvrent) ;
  *  - Pas intéressé : le motif exigé (liste des pertes), une précision pour « Autre ».
  * Les heures sont celles de Paris (`aHeureParis`), quel que soit le fuseau du téléphone.
+ *
+ * Mission 25 — « Qu'est-ce qui s'est dit ? » : trois puces de plus (Va signer : rappel dans 1 semaine, 2 semaines ou
+ * 1 mois, relances en pause, « comme convenu » préparé pour ce jour ; Réfléchit : rappel dans 3 jours ; Échantillons :
+ * deux créneaux de l'agenda, sinon la poste). L'appel part par `/api/messagerie/apres-appel` (qui note l'appel par
+ * `noterAppel`, comme avant) et revient avec le message préparé par la messagerie (A2, A4, A5, P1…), montré au retour.
  */
 
 export type AppelANoter = { leadId: string; nom?: string; dossierId?: string | null };
@@ -33,7 +39,24 @@ export type AppelANoter = { leadId: string; nom?: string; dossierId?: string | n
 type ChoixRappel = RaccourciRappel["cle"] | "AUTRE" | "SANS_DATE";
 
 /** L'ordre des puces de la feuille (l'issue la plus fréquente d'abord) ; `ISSUES_APPEL` garde le sien (schéma, outil MCP). */
-const ORDRE_FEUILLE = ["PAS_DE_REPONSE", "A_RAPPELER", "INTERESSE", "PAS_INTERESSE"] as const satisfies readonly IssueAppel[];
+const ORDRE_FEUILLE = ["PAS_DE_REPONSE", "A_RAPPELER", "INTERESSE", "VA_SIGNER", "REFLECHIT", "ECHANTILLONS", "PAS_INTERESSE"] as const;
+type IssueFeuille = (typeof ORDRE_FEUILLE)[number];
+const LIBELLES_FEUILLE: Record<IssueFeuille, string> = {
+  ...(LIBELLES_ISSUE as Record<IssueAppel, string>),
+  INTERESSE: "Intéressé, veut une simulation",
+  VA_SIGNER: "Va signer",
+  REFLECHIT: "Réfléchit",
+  ECHANTILLONS: "Veut voir les échantillons",
+};
+const DELAIS_SIGNATURE = [
+  { valeur: "1S", libelle: "Dans 1 semaine" },
+  { valeur: "2S", libelle: "Dans 2 semaines" },
+  { valeur: "1M", libelle: "Dans 1 mois" },
+] as const;
+type DelaiSignature = (typeof DELAIS_SIGNATURE)[number]["valeur"];
+
+/** La suite d'un appel noté, avec le message préparé par la messagerie (mission 25). */
+export type SuiteAvecMessage = SuiteAppel & { messagerie?: MessageVue | null };
 
 /** L'appel s'écrit sur le dossier connu ; « dossier:<id> » (dossier sans lead, appelé depuis sa fiche) aussi. */
 function cibleDe(appel: AppelANoter): { dossierId: string } | { leadId: string } {
@@ -70,10 +93,11 @@ function ChampRappel({ valeur, onChange, maintenant, defaut = null }: { valeur: 
   );
 }
 
-export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: AppelANoter; onPlusTard: () => void; onEnregistre: (suite: SuiteAppel) => void }) {
+export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: AppelANoter; onPlusTard: () => void; onEnregistre: (suite: SuiteAvecMessage) => void }) {
   const [maintenant] = useState(() => new Date());
   const [contexte, setContexte] = useState<ContexteAppel | null>(null);
-  const [issue, setIssue] = useState<IssueAppel | null>(null);
+  const [issue, setIssue] = useState<IssueFeuille | null>(null);
+  const [delai, setDelai] = useState<DelaiSignature>("2S");
   const [note, setNote] = useState("");
   // « Pas de réponse » : demain 18 h, modifiable ; vidé, le serveur reprend ce défaut.
   const [rappelSansReponse, setRappelSansReponse] = useState(() => versSaisieParis(aHeureParis(new Date(), 1, 18)));
@@ -103,7 +127,13 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
   const tentativesAvant = contexte?.tentatives ?? 0;
   const precisionManquante = issue === "PAS_INTERESSE" && motif === "AUTRE" && note.trim().length < 3;
   const pret =
-    issue === "PAS_DE_REPONSE" || issue === "INTERESSE" || (issue === "A_RAPPELER" && rappelARappeler !== undefined) || (issue === "PAS_INTERESSE" && motif !== null && !precisionManquante);
+    issue === "PAS_DE_REPONSE" ||
+    issue === "INTERESSE" ||
+    issue === "VA_SIGNER" ||
+    issue === "REFLECHIT" ||
+    issue === "ECHANTILLONS" ||
+    (issue === "A_RAPPELER" && rappelARappeler !== undefined) ||
+    (issue === "PAS_INTERESSE" && motif !== null && !precisionManquante);
   const nom = appel.nom || contexte?.nom;
   // L'appel s'écrit sur un dossier (connu de la feuille, ou lu par le contexte) : le contact n'est dans aucune liste Leads.
   const surDossier = "dossierId" in cible || Boolean(contexte?.dossierId);
@@ -111,7 +141,7 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
 
   /** `sansSuite` : « Classer sans suite — plus de réponse » (pas intéressé, motif « Plus de réponse »). */
   async function enregistrer(sansSuite = false) {
-    const envoyee: IssueAppel | null = sansSuite ? "PAS_INTERESSE" : issue;
+    const envoyee: IssueFeuille | null = sansSuite ? "PAS_INTERESSE" : issue;
     if (!envoyee || envoi) return;
     const corps = {
       ...cible,
@@ -119,13 +149,15 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
       note: note.trim(),
       ...(envoyee === "PAS_DE_REPONSE" ? { rappelLe: depuisSaisieParis(rappelSansReponse)?.toISOString() ?? null } : {}),
       ...(envoyee === "A_RAPPELER" ? { rappelLe: rappelARappeler ? rappelARappeler.toISOString() : null } : {}),
-      ...(envoyee === "PAS_INTERESSE" ? { motifPerte: sansSuite ? "SANS_REPONSE" : motif } : {}),
+      ...(envoyee === "PAS_INTERESSE" ? { motifPerte: sansSuite ? "SANS_REPONSE" : motif, ...(note.trim() ? { perteCommentaire: note.trim() } : {}) } : {}),
+      ...(envoyee === "VA_SIGNER" ? { delai } : {}),
     };
     setEnvoi(true);
     try {
       // La note d'appel en attente (tapée ou dictée juste avant) part d'abord : l'issue s'y accroche (`noterIssueSurNote`).
       await viderNotesEnAttente(appel.leadId);
-      const { suite } = await envoyerJson<{ suite: SuiteAppel }>("/api/commercial/appels", "POST", corps);
+      // Mission 25 : la messagerie note l'appel (même fonction qu'avant) et rend le message qu'elle a préparé.
+      const suite = await envoyerJson<SuiteAvecMessage>("/api/messagerie/apres-appel", "POST", corps);
       onEnregistre(suite);
     } catch (erreur) {
       toast.error("Appel non enregistré", { description: messageErreur(erreur) });
@@ -139,7 +171,7 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
       <div className="max-h-[calc(100dvh-6.5rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] w-full max-w-md overflow-y-auto overscroll-contain rounded-[16px] border-[0.5px] border-trait bg-surface p-4 shadow-lg shadow-black/50">
         <p className="flex items-center gap-2 text-[15px] font-medium text-texte">
           <PhoneIncoming size={16} aria-hidden className="shrink-0 text-action-clair" />
-          Comment ça s&apos;est passé{nom ? ` avec ${nom}` : ""} ?
+          Qu&apos;est-ce qui s&apos;est dit{nom ? ` avec ${nom}` : ""} ?
         </p>
         {infos ? <p className="mt-0.5 pl-6 text-[12.5px] text-texte-3">{infos}</p> : null}
 
@@ -152,7 +184,7 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
               onClick={() => setIssue(valeur)}
               className={cn("min-h-[44px] rounded-[10px] border-[0.5px] px-3 text-[13.5px] font-medium", issue === valeur ? "border-action/60 bg-action/15 text-action-clair" : "border-trait text-texte-2 hover:border-trait-2", TRANS)}
             >
-              {LIBELLES_ISSUE[valeur]}
+              {LIBELLES_FEUILLE[valeur]}
             </button>
           ))}
         </div>
@@ -195,7 +227,15 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
           </div>
         ) : null}
 
-        {issue === "INTERESSE" ? <p className="mt-3 text-[12.5px] leading-snug text-texte-3">Son dossier et son espace s&apos;ouvrent ; le SMS avec le lien de son espace te sera proposé.</p> : null}
+        {issue === "INTERESSE" ? <p className="mt-3 text-[12.5px] leading-snug text-texte-3">Son dossier et son espace s&apos;ouvrent ; le message avec le lien de son espace (P1) est préparé.</p> : null}
+        {issue === "VA_SIGNER" ? (
+          <div className="mt-3">
+            <Puces libelle="Le rappeler" obligatoire options={DELAIS_SIGNATURE} valeur={delai} onChange={setDelai} />
+            <p className="mt-1.5 text-[12.5px] leading-snug text-texte-3">Relances en pause jusque-là ; « comme convenu » est préparé pour ce jour-là.</p>
+          </div>
+        ) : null}
+        {issue === "REFLECHIT" ? <p className="mt-3 text-[12.5px] leading-snug text-texte-3">Rappel dans 3 jours.</p> : null}
+        {issue === "ECHANTILLONS" ? <p className="mt-3 text-[12.5px] leading-snug text-texte-3">Deux créneaux libres de ton agenda (25 km ou moins), sinon des échantillons par la poste.</p> : null}
 
         {issue === "PAS_INTERESSE" ? (
           <div className="mt-3">

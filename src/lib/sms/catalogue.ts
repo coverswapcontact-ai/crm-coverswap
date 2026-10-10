@@ -99,7 +99,7 @@ export const CATALOGUE_SMS = [
     lien: false,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre simulation. Je vous rappelle {quand}, ou dites-moi le moment qui vous arrange.",
+    defaut: "Bonjour, j'ai essayé de vous joindre au sujet de votre simulation. Je vous rappelle {quand}, ou dites-moi le moment qui vous arrange.",
   },
   {
     code: "PAS_DE_REPONSE",
@@ -110,7 +110,7 @@ export const CATALOGUE_SMS = [
     lien: false,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle {quand}, ou dites-moi le moment qui vous arrange.",
+    defaut: "Bonjour, j'ai essayé de vous joindre au sujet de votre projet de rénovation. Je vous rappelle {quand}, ou dites-moi le moment qui vous arrange.",
   },
   {
     code: "PAS_DE_REPONSE_2",
@@ -121,7 +121,7 @@ export const CATALOGUE_SMS = [
     lien: false,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour, c'est encore Lucas de CoverSwap. Je n'arrive pas à vous joindre : répondez-moi ici avec un moment qui vous arrange, ou dites-moi simplement si le projet n'est plus d'actualité.",
+    defaut: "Bonjour, je n'arrive pas à vous joindre : répondez-moi ici avec un moment qui vous arrange, ou dites-moi simplement si le projet n'est plus d'actualité.",
   },
   {
     code: "A_RAPPELER",
@@ -132,7 +132,7 @@ export const CATALOGUE_SMS = [
     lien: false,
     automatique: false,
     fournisseur: false,
-    defaut: "Merci pour votre réponse ! C'est noté, je vous rappelle {quand}. À très vite, Lucas de CoverSwap.",
+    defaut: "Merci pour votre réponse ! C'est noté, je vous rappelle {quand}. À très vite !",
   },
   // ── Espace client : le lien en dernier.
   {
@@ -144,7 +144,7 @@ export const CATALOGUE_SMS = [
     lien: true,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. {lien}",
+    defaut: "Bonjour {prenom}, comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez. {lien}",
   },
   {
     code: "LIEN_ESPACE_SIMULATION",
@@ -155,7 +155,7 @@ export const CATALOGUE_SMS = [
     lien: true,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Comme convenu, votre simulation vous attend dans votre espace personnel, avec la suite de votre projet : {lien}",
+    defaut: "Bonjour {prenom}, comme convenu, votre simulation vous attend dans votre espace personnel, avec la suite de votre projet : {lien}",
   },
   {
     code: "INJOIGNABLE_LIEN",
@@ -166,7 +166,7 @@ export const CATALOGUE_SMS = [
     lien: true,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. J'ai essayé de vous joindre au sujet de votre projet. Votre espace personnel est prêt, vous pouvez y déposer quelques photos quand vous voulez : {lien}",
+    defaut: "Bonjour {prenom}, j'ai essayé de vous joindre au sujet de votre projet. Votre espace personnel est prêt, vous pouvez y déposer quelques photos quand vous voulez : {lien}",
   },
   {
     code: "LIEN_ESPACE_RAPPEL",
@@ -177,7 +177,7 @@ export const CATALOGUE_SMS = [
     lien: true,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Voici à nouveau le lien de votre espace, tout votre projet y est à jour : {lien}",
+    defaut: "Bonjour {prenom}, voici à nouveau le lien de votre espace, tout votre projet y est à jour : {lien}",
   },
   {
     code: "LIEN_ESPACE_NOUVEAU",
@@ -188,7 +188,7 @@ export const CATALOGUE_SMS = [
     lien: true,
     automatique: false,
     fournisseur: true,
-    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Voici le nouveau lien de votre espace, l'ancien ne fonctionne plus : {lien}",
+    defaut: "Bonjour {prenom}, voici le nouveau lien de votre espace, l'ancien ne fonctionne plus : {lien}",
   },
   {
     code: "SIMULATION_PRETE",
@@ -199,7 +199,7 @@ export const CATALOGUE_SMS = [
     lien: true,
     automatique: false,
     fournisseur: true,
-    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Votre simulation est en ligne dans votre espace, dites-moi ce que vous en pensez : {lien}",
+    defaut: "Bonjour {prenom}, votre simulation est en ligne dans votre espace, dites-moi ce que vous en pensez : {lien}",
   },
   // ── Relances de devis.
   {
@@ -211,7 +211,7 @@ export const CATALOGUE_SMS = [
     lien: false,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour, c'est Lucas de CoverSwap. Avez-vous pu regarder votre devis ? Il est toujours dans votre espace client. Je reste disponible si vous avez des questions.",
+    defaut: "Bonjour, avez-vous pu regarder votre devis ? Il est toujours dans votre espace client. Je reste disponible si vous avez des questions.",
   },
   {
     code: "RELANCE_DEVIS_2",
@@ -222,7 +222,7 @@ export const CATALOGUE_SMS = [
     lien: false,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour, c'est Lucas de CoverSwap. Je reviens vers vous pour votre devis : s'il vous reste une question ou si le projet n'est plus d'actualité, dites-le-moi simplement.",
+    defaut: "Bonjour, je reviens vers vous pour votre devis : s'il vous reste une question ou si le projet n'est plus d'actualité, dites-le-moi simplement.",
   },
   // ── Mission 18 (A4) : après le chantier, et six mois après un projet resté sans suite.
   {
@@ -234,7 +234,7 @@ export const CATALOGUE_SMS = [
     lien: true,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Merci encore pour votre confiance. Si le résultat vous plaît, votre avis nous aide beaucoup : il se donne en un clic depuis votre espace : {lien}",
+    defaut: "Bonjour {prenom}, merci encore pour votre confiance. Si le résultat vous plaît, votre avis nous aide beaucoup : il se donne en un clic depuis votre espace : {lien}",
   },
   {
     code: "REACTIVATION",
@@ -245,7 +245,7 @@ export const CATALOGUE_SMS = [
     lien: false,
     automatique: false,
     fournisseur: false,
-    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Où en est votre projet de rénovation ? S'il est toujours d'actualité, répondez-moi ici. STOP pour ne plus en recevoir.",
+    defaut: "Bonjour {prenom}, où en est votre projet de rénovation ? S'il est toujours d'actualité, répondez-moi ici. STOP pour ne plus en recevoir.",
   },
 ] as const satisfies readonly DefinitionSms[];
 

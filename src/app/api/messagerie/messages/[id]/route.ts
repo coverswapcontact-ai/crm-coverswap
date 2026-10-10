@@ -4,7 +4,7 @@ import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import prisma from "@/lib/prisma";
 import { annulerMessage, confirmerEnvoi, envoyerDansLEspace, nePasEnvoyer, noterOuverture, reporterMessage, validerProposition } from "@/lib/messagerie/gestes";
 import { RAISONS_NON_ENVOI } from "@/lib/messagerie/types";
-import { avecImages, vueDuMessage } from "@/lib/messagerie/vues";
+import { avecImages, premiersSms, vueDuMessage } from "@/lib/messagerie/vues";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,7 @@ export async function POST(requete: NextRequest, { params }: { params: Promise<{
         break;
     }
     const message = await prisma.messagePrepare.findUnique({ where: { id } });
-    return NextResponse.json({ message: message ? (await avecImages([vueDuMessage(message)]))[0] : null });
+    return NextResponse.json({ message: message ? (await avecImages([vueDuMessage(message, (await premiersSms([message.suiviId])).has(message.suiviId))]))[0] : null });
   } catch (erreur) {
     return reponseErreur(erreur, "POST /api/messagerie/messages/[id]");
   }
@@ -63,7 +63,7 @@ export async function GET(_requete: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const message = await prisma.messagePrepare.findUnique({ where: { id } });
     const suivi = message ? await prisma.suivi.findUnique({ where: { id: message.suiviId }, select: { id: true, nom: true, telephone: true } }) : null;
-    return NextResponse.json({ message: message ? (await avecImages([vueDuMessage(message)]))[0] : null, suivi });
+    return NextResponse.json({ message: message ? (await avecImages([vueDuMessage(message, (await premiersSms([message.suiviId])).has(message.suiviId))]))[0] : null, suivi });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/messagerie/messages/[id]");
   }

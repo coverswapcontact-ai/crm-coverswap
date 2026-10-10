@@ -19,7 +19,7 @@ import {
   preparerMessageLibre,
   rapporterReponse,
 } from "@/lib/messagerie/gestes";
-import { filDuSuivi, ouEnEstDuSuivi, vueDuMessage } from "@/lib/messagerie/vues";
+import { filDuSuivi, ouEnEstDuSuivi, premiersSms, vueDuMessage } from "@/lib/messagerie/vues";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +94,8 @@ export async function POST(requete: NextRequest, { params }: { params: Promise<{
       const recu = String(formulaire.get("recuLe") ?? "");
       const photos = formulaire.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0).slice(0, 10);
       const resultat = await rapporterReponse({ suiviId, texte, recuLe: recu && !Number.isNaN(Date.parse(recu)) ? new Date(recu) : null, photos });
-      return NextResponse.json({ suiviId: resultat.suiviId, photos: resultat.photos, proposee: resultat.proposee ? vueDuMessage(resultat.proposee) : null });
+      const premier = (await premiersSms([resultat.suiviId])).has(resultat.suiviId);
+      return NextResponse.json({ suiviId: resultat.suiviId, photos: resultat.photos, proposee: resultat.proposee ? vueDuMessage(resultat.proposee, premier) : null });
     }
     const entree = analyser(schema, await lireCorpsJson(requete));
     switch (entree.action) {
@@ -118,13 +119,13 @@ export async function POST(requete: NextRequest, { params }: { params: Promise<{
       case "note": {
         const r = await ajouterNote({ suiviId, texte: entree.texte });
         const cree = r.crees.length ? await prisma.messagePrepare.findFirst({ where: { id: { in: r.crees } }, orderBy: { createdAt: "asc" } }) : null;
-        return NextResponse.json({ ouEnEst: r.ouEnEst, proposee: cree ? vueDuMessage(cree) : null });
+        return NextResponse.json({ ouEnEst: r.ouEnEst, proposee: cree ? vueDuMessage(cree, (await premiersSms([suiviId])).has(suiviId)) : null });
       }
       case "libre":
-        return NextResponse.json({ message: vueDuMessage(await preparerMessageLibre({ suiviId, texte: entree.texte, code: entree.code, canal: entree.canal })) });
+        return NextResponse.json({ message: vueDuMessage(await preparerMessageLibre({ suiviId, texte: entree.texte, code: entree.code, canal: entree.canal }), (await premiersSms([suiviId])).has(suiviId)) });
       case "rappel": {
         const message = await poserRappelManuel({ suiviId, le: new Date(entree.le), prevenir: entree.prevenir });
-        return NextResponse.json({ message: message ? vueDuMessage(message) : null });
+        return NextResponse.json({ message: message ? vueDuMessage(message, (await premiersSms([suiviId])).has(suiviId)) : null });
       }
       case "lien":
         return NextResponse.json({ lien: await lienDeLEspace(suiviId) });
@@ -134,7 +135,7 @@ export async function POST(requete: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ ouEnEst: await corrigerOuEnEst(suiviId, { situation: entree.situation, client: entree.client, suite: entree.suite }) });
       case "apres-appel": {
         const r = await apresAppel({ suiviId, issue: entree.issue, delai: entree.delai, motifPerte: entree.motifPerte, perteCommentaire: entree.perteCommentaire, note: entree.note, rappelLe: entree.rappelLe ? new Date(entree.rappelLe) : null });
-        return NextResponse.json({ suiviId: r.suiviId, resume: r.resume, proposerSansSuite: r.proposerSansSuite, proposee: r.proposee ? vueDuMessage(r.proposee) : null });
+        return NextResponse.json({ suiviId: r.suiviId, resume: r.resume, proposerSansSuite: r.proposerSansSuite, proposee: r.proposee ? vueDuMessage(r.proposee, (await premiersSms([r.suiviId])).has(r.suiviId)) : null });
       }
     }
   } catch (erreur) {

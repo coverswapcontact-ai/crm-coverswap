@@ -12,9 +12,14 @@
  */
 
 export const LONGUEUR_MAX_IA = 320;
-const MOTS_INTERDITS = /\b(gratuit\w*|offert\w*|remise\w*|promo\w*|garanti\w*|promis\w*|promesse\w*|r[ée]duction\w*|rabais)\b/i;
-const IA = /\b(ia|i\.a\.|intelligence artificielle|assistant(e)?|chat ?gpt|claude|robot|bot)\b/i;
-const TUTOIEMENT = /\b(tu|toi|ton|ta|tes|te|t'|tiens|peux-tu|veux-tu|as-tu|es-tu)\b/i;
+/**
+ * Un mot entier, accents compris : `\b` ne connaît que les lettres sans accent (« prête » finirait par le mot « te »).
+ * Lot 3 : relevé en remplissant les 41 messages (« dès qu'elle est prête » passait pour du tutoiement).
+ */
+const mot = (motif: string) => new RegExp(`(?<![\\p{L}\\p{N}_])(?:${motif})(?![\\p{L}\\p{N}_])`, "iu");
+const MOTS_INTERDITS = mot("gratuit\\p{L}*|offert\\p{L}*|remise\\p{L}*|promo\\p{L}*|garanti\\p{L}*|promis\\p{L}*|promesse\\p{L}*|r[ée]duction\\p{L}*|rabais");
+const IA = mot("ia|i\\.a\\.|intelligence artificielle|assistante?|chat ?gpt|claude|robot|bot");
+const TUTOIEMENT = new RegExp(`${mot("tu|toi|ton|ta|tes|te|tiens|peux-tu|veux-tu|as-tu|es-tu").source}|(?<![\\p{L}\\p{N}_])t['’](?=\\p{L})`, "iu");
 const MONTANT = /(\d[\d\s.,]*\s?(€|euros?|eur\b|ht\b|ttc\b))|(€\s?\d)/i;
 const POURCENTAGE = /\d\s?(%|pour ?cent)/i;
 const DATE_CHIFFRES = /\b\d{1,2}[/.-]\d{1,2}([/.-]\d{2,4})?\b/;
@@ -63,6 +68,28 @@ export function controlerTexte(texte: string, contexte: ContexteControle): Ecart
   if (!contexte.premierContact && /lucas de coverswap/i.test(t)) ecarts.push({ regle: "PRESENTATION", detail: "« Lucas de CoverSwap » seulement au premier contact." });
   const salutation = t.match(/^bonjour\s+([\p{L}'’-]+)\s*,/iu);
   if (salutation && (!contexte.prenom || salutation[1].toLowerCase() !== contexte.prenom.toLowerCase())) ecarts.push({ regle: "PRENOM", detail: "Un prénom qui n'est pas fiable." });
+  return ecarts;
+}
+
+/**
+ * Lot 5 — les deux lignes de « Où on en est » écrites par l'IA (règle d'or 3) : non vides, courtes (110 et 80
+ * caractères), des dates absolues seulement (« le 14/10 », « jeudi 15/10 ») : jamais « demain », « hier », « jeudi »
+ * seul, « la semaine prochaine », « dans 3 jours » — la ligne serait fausse le lendemain. Sinon les lignes des règles.
+ */
+const DATE_RELATIVE = new RegExp(
+  `${mot("demain|après-demain|hier|avant-hier|aujourd'hui|ce matin|ce midi|ce soir|cet après-midi|tout à l'heure|cette semaine|la semaine (?:prochaine|dernière)|le mois (?:prochain|dernier)|ce week-end|dans (?:\\d+|un|une|deux|trois|quelques) (?:jours?|semaines?|mois)|il y a (?:\\d+|un|une|deux|trois|quelques) (?:jours?|semaines?|mois)").source}|${mot("lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche").source}(?!\\s+\\d)`,
+  "iu"
+);
+
+export function controlerOuEnEst(lignes: { situation: string | null; client: string | null }): Ecart[] {
+  const ecarts: Ecart[] = [];
+  const situation = lignes.situation?.trim() ?? "";
+  const client = lignes.client?.trim() ?? "";
+  if (!situation || !client) return [{ regle: "VIDE", detail: "Une ligne vide." }];
+  if (situation.length > 110) ecarts.push({ regle: "LONGUEUR", detail: `Situation de ${situation.length} caractères (110 au plus).` });
+  if (client.length > 80) ecarts.push({ regle: "LONGUEUR", detail: `Ligne client de ${client.length} caractères (80 au plus).` });
+  const relative = `${situation} ${client}`.match(DATE_RELATIVE);
+  if (relative) ecarts.push({ regle: "DATE_RELATIVE", detail: `« ${relative[0]} » : une date absolue (le 14/10), jamais relative.` });
   return ecarts;
 }
 

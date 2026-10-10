@@ -21,7 +21,7 @@ import { HORIZON_MS, planifier } from "./planificateur";
 import { canalDe, ecrireMessage, lienEspaceDuDossier, libelleDuCode, lireSurcharges, rediger, type Surcharges } from "./redaction";
 import { classerMessage, faitsDuMessage, fusionnerFaits, lireNote, LIBELLES_CLASSE, dateDite, type ClasseMessage } from "./regles";
 import { enDouceur, lancementMessagerie, suiviPour } from "./suivis";
-import { texteControle } from "./controleur";
+import { controlerOuEnEst, texteControle } from "./controleur";
 import { formuleBonjour, remplirTexte, texteDeLaListe } from "./texte";
 import type { EtatSuivi, Intention, OuEnEst } from "./types";
 
@@ -70,7 +70,7 @@ export type ResultatAnalyse = { suiviId: string; crees: string[]; annules: numbe
 type Instantane = { dateChantier?: string | null; consultations?: Record<string, number>; accord?: string | null };
 
 /** Les éléments de l'histoire qui sont des notes de Lucas (le texte entier, pas l'extrait du journal). */
-async function textesDesNotes(cles: string[]): Promise<Map<string, string>> {
+export async function textesDesNotes(cles: string[]): Promise<Map<string, string>> {
   const textes = new Map<string, string>();
   const ev = cles.filter((c) => c.startsWith("ev:")).map((c) => c.slice(3));
   const inter = cles.filter((c) => c.startsWith("in:")).map((c) => c.slice(3));
@@ -81,7 +81,7 @@ async function textesDesNotes(cles: string[]): Promise<Map<string, string>> {
   return textes;
 }
 
-const estNote = (e: ElementHistoire) => e.acteur === "TOI" && /^(Note|Note après appel|Appel)/.test(e.texte) && !/Planifié :/.test(e.texte);
+export const estNote = (e: ElementHistoire) => e.acteur === "TOI" && /^(Note|Note après appel|Appel)/.test(e.texte) && !/Planifié :/.test(e.texte);
 
 /**
  * Analyse un suivi : journal, messages du client, notes, faits, messages préparés, « Où on en est ». Ne jette pas :
@@ -282,8 +282,11 @@ export async function analyserSuivi(suiviId: string, maintenant: Date = new Date
     }
   })();
   if (analyseIa?.situation && analyseIa.client) {
+    // Lot 5 : les lignes de l'IA passent le contrôleur (dates absolues, longueurs), sinon celles des règles restent.
     const total = analyseIa.situation.length + analyseIa.client.length + ouEnEst.suite.length;
-    if (total <= 240) ouEnEst = { ...ouEnEst, situation: analyseIa.situation, client: analyseIa.client, par: "IA" };
+    const ecarts = controlerOuEnEst({ situation: analyseIa.situation, client: analyseIa.client });
+    if (total <= 240 && !ecarts.length) ouEnEst = { ...ouEnEst, situation: analyseIa.situation, client: analyseIa.client, par: "IA" };
+    else console.info(`[messagerie] « Où on en est » de l'IA écarté pour ${suivi.id} : ${ecarts.map((e) => e.detail).join(" ") || `${total} caractères`}`);
   } else if (precedent.par === "IA" && !nouveaux.length && precedent.situation && precedent.client && precedent.situation.length + precedent.client.length + ouEnEst.suite.length <= 240) {
     // Les deux lignes de l'IA restent tant qu'aucun fait nouveau n'est arrivé ; la suite, elle, suit toujours la règle.
     ouEnEst = { ...ouEnEst, situation: precedent.situation, client: precedent.client, par: "IA" };
@@ -358,8 +361,11 @@ async function preparer(suiviId: string, etat: EtatSuivi, intention: Intention, 
   return id;
 }
 
-/** La réponse au dernier message du client, d'après sa classe : un code de la liste, ou la réponse de l'IA contrôlée. */
-async function intentionDeReponse(
+/**
+ * La réponse au dernier message du client, d'après sa classe : un code de la liste, ou la réponse de l'IA contrôlée.
+ * `aBlanc` (rejeu, lot 5) : aucun rappel posé, rien d'écrit.
+ */
+export async function intentionDeReponse(
   etat: EtatSuivi,
   classe: ClasseMessage,
   message: { id: string; le: Date; texte: string },
@@ -367,7 +373,8 @@ async function intentionDeReponse(
   rappelIa: { le: Date; motif: string } | null,
   maintenant: Date,
   surcharges: Surcharges,
-  lienEspace: string | null
+  lienEspace: string | null,
+  aBlanc = false
 ): Promise<Intention | null> {
   const cle = `REPONSE:${message.id}`;
   const base = { cle, voulu: maintenant, sourceId: message.id };
@@ -387,7 +394,7 @@ async function intentionDeReponse(
     case "DISPONIBILITES": {
       const date = rappelIa?.le ?? dateDite(message.texte, maintenant);
       if (date) {
-        if (!memeJour(etat.rappel?.le, date)) await poserRappel(etat, date, "Rappeler (dispo du client)").catch((e: unknown) => console.error("[messagerie] rappel non posé :", e));
+        if (!aBlanc && !memeJour(etat.rappel?.le, date)) await poserRappel(etat, date, "Rappeler (dispo du client)").catch((e: unknown) => console.error("[messagerie] rappel non posé :", e));
         return { ...base, code: "E3", variante: "defaut", raison: `Ses disponibilités : rappel posé le ${jourCourt(date)}`, valeurs: { quand: quandLisible(date, maintenant) } };
       }
       return { ...base, code: "Q6", variante: "defaut", raison: "Ses disponibilités (aucune date lisible)" };

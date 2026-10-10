@@ -22,8 +22,11 @@ const EXEMPLE = { prenom: "Camille", quand: "demain vers 18 h", lien: "https://c
 /**
  * Paramètres → SMS (mission 14, partie 5) : le fournisseur, puis LE catalogue des
  * SMS, par groupe. Un seul endroit pour les textes : l'écran SMS, l'assistant et
- * les relances lisent ceux-ci. Rien ne part tout seul sauf les deux accusés de
- * réception ; copier un SMS vaut envoi.
+ * les relances lisent ceux-ci. Copier un SMS vaut envoi.
+ *
+ * Mission 25 (lot 3) : la messagerie a sa propre liste (MessagesDeLaListe, au-dessus).
+ * Ici restent le fournisseur et les SMS de l'écran SMS ; les deux accusés de
+ * réception, remplacés par A1, ne s'affichent plus (leurs lignes restent en base).
  */
 export default function MessagerieSms({ initial }: { initial: Reponse }) {
   // Mission 13 (lot 3) : les modèles arrivent du serveur avec la page.
@@ -35,7 +38,7 @@ export default function MessagerieSms({ initial }: { initial: Reponse }) {
 
   return (
     <section className="mt-10" id="sms">
-      <TitreSection>Messagerie SMS</TitreSection>
+      <TitreSection>Fournisseur et SMS de l&apos;écran SMS</TitreSection>
 
       <div className={cn(CARTE, "p-4")}>
         <p className="flex items-center gap-2 text-[14px] font-medium text-texte">
@@ -62,15 +65,14 @@ export default function MessagerieSms({ initial }: { initial: Reponse }) {
 
       <div className="mt-6 space-y-1.5 text-[12.5px] leading-relaxed text-texte-3">
         <p>
-          <span className="text-texte">Un seul endroit pour les textes SMS.</span>{" "}
-          L&apos;écran SMS, l&apos;assistant et les relances lisent ceux-ci : ce que tu corriges ici est ce qui sera proposé la prochaine fois.
+          <span className="text-texte">Les textes de l&apos;écran SMS</span> (lien de l&apos;espace, simulation en ligne, après un appel), que l&apos;assistant lit aussi : ce que tu corriges ici est ce qui sera proposé la prochaine fois.
         </p>
-        <p>Rien ne part tout seul, sauf les deux accusés de réception. Les autres SMS s&apos;ouvrent préremplis : tu relis, tu copies, tu colles dans Messages. Copier un SMS vaut envoi : il s&apos;écrit dans l&apos;historique du lead ou du dossier.</p>
+        <p>Rien ne part tout seul : les accusés de réception sont remplacés par le premier message de la messagerie (A1). Ces SMS s&apos;ouvrent préremplis : tu relis, tu copies, tu colles dans Messages. Copier un SMS vaut envoi : il s&apos;écrit dans l&apos;historique du lead ou du dossier.</p>
         <p>Règles d&apos;écriture : parler du projet, pas de la pièce ; ne jamais promettre de simulation ; court et naturel (160 caractères, un SMS, quand il n&apos;y a pas de lien) ; le lien toujours à la fin.</p>
       </div>
 
       {/* Mission 14 (partie 6) : l'ancien circuit de relances est retiré, ses modèles archivés ; les relances sont des SMS à copier. */}
-      {GROUPES_SMS.map((groupe) =>
+      {GROUPES_SMS.filter((groupe) => groupe !== "AUTOMATIQUES").map((groupe) =>
         duGroupe(groupe).length ? (
           <div key={groupe} className="mt-6">
             <h3 className="mb-2 text-[12px] font-medium tracking-wide text-texte-3 uppercase">{LIBELLES_GROUPE_SMS[groupe]}</h3>

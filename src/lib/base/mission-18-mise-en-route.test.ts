@@ -82,8 +82,9 @@ describe("mise en route de la mission 18", () => {
     assert.deepEqual(JSON.parse(passee.resume), { dossiersControles: 0, trouves: 0, repares: 0, taches: 0, detecteur: 0, echecs: 0 });
     assert.deepEqual(await executer(), { dossiersControles: 0, trouves: 0, repares: 0, taches: 0, detecteur: 0, echecs: 0 });
     const noms = (await import("@/lib/base/migrations")).MIGRATIONS_DONNEES.map((x) => x.nom);
-    assert.equal(noms.at(-1), m.NOM_MIGRATION_MR_18);
+    // Mission 25 (lot 3) : « sms-sans-presentation-25 » la suit désormais ; elle reste après « etats-en-double-18 ».
     assert.ok(noms.indexOf(m.NOM_MIGRATION_MR_18) > noms.indexOf("etats-en-double-18") && noms.includes("etats-en-double-18"), noms.join(", "));
+    assert.ok(noms.indexOf("sms-sans-presentation-25") > noms.indexOf(m.NOM_MIGRATION_MR_18), noms.join(", "));
     assert.equal(await prisma.tacheAFaire.count(), 0);
   });
 

@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { Phone, PhoneForwarded } from "lucide-react";
 import { toast } from "sonner";
-import type { SuiteAppel } from "@/lib/commercial/constantes";
 import type { LeadSuivant } from "@/lib/prospects/leads";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
 import { rafraichirCompteurs, signalerAppelTermine, signalerLeadsModifies } from "./evenements";
-import { FeuilleFinAppel } from "./FinAppel";
+import { FeuilleFinAppel, type SuiteAvecMessage } from "./FinAppel";
+import { CarteMessage } from "@/components/messagerie/CarteMessage";
+import type { MessageVue } from "@/lib/messagerie/vues";
 import { appelEnCours, finAppel, marquerAppelPropose, noterDebutAppel, type AppelEnCours } from "./NotesAppel";
 import { ouvrirEcranSms } from "./sms/EcranSms";
 import { TRANS } from "./ui";
@@ -88,9 +89,25 @@ function CarteSuivant({ suivant, onFermer }: { suivant: LeadSuivant; onFermer: (
   );
 }
 
+/** Mission 25 : le message préparé par la messagerie après l'appel (A2, P1…), à ouvrir dans Messages tout de suite. */
+function FeuilleMessagePret({ message, nom, onFini }: { message: MessageVue; nom?: string; onFini: () => void }) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center px-3 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6" role="dialog" aria-label="Message préparé">
+      <div className="max-h-[calc(100dvh-6.5rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] w-full max-w-md space-y-2 overflow-y-auto rounded-[16px] border-[0.5px] border-trait bg-surface p-3 shadow-lg shadow-black/50">
+        <p className="px-1 text-[15px] font-medium text-texte">Message prêt{nom ? ` pour ${nom}` : ""}</p>
+        <CarteMessage message={message} nom={nom} onChange={() => onFini()} />
+        <button type="button" onClick={onFini} className={cn("min-h-[44px] w-full rounded-[10px] border-[0.5px] border-trait text-[14px] text-texte-2 hover:border-trait-2", TRANS)}>
+          Plus tard (il reste dans la messagerie)
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function RetourAppel() {
   const [appel, setAppel] = useState<AppelANoter | null>(null);
   const [suivant, setSuivant] = useState<LeadSuivant | null>(null);
+  const [pret, setPret] = useState<{ message: MessageVue; nom?: string; fini: AppelANoter } | null>(null);
 
   useEffect(() => {
     const verifier = () => {
@@ -129,14 +146,15 @@ export function RetourAppel() {
       .catch(() => undefined);
   }
 
-  function enregistre(fini: AppelANoter, suite: SuiteAppel) {
+  function enregistre(fini: AppelANoter, suite: SuiteAvecMessage) {
     finAppel(fini.leadId);
     rafraichirCompteurs();
     signalerLeadsModifies();
     fini.onEnregistre?.();
     toast.success(suite.resume);
     setAppel(null);
-    if (suite.sms) ouvrirEcranSms({ proposition: suite.sms, onFini: () => terminer(fini) });
+    if (suite.messagerie) setPret({ message: suite.messagerie, nom: fini.nom, fini });
+    else if (suite.sms) ouvrirEcranSms({ proposition: suite.sms, onFini: () => terminer(fini) });
     else terminer(fini);
   }
 
@@ -150,6 +168,20 @@ export function RetourAppel() {
           setAppel(null);
         }}
         onEnregistre={(suite) => enregistre(appel, suite)}
+      />
+    );
+  }
+  if (pret) {
+    return (
+      <FeuilleMessagePret
+        message={pret.message}
+        nom={pret.nom}
+        onFini={() => {
+          const fini = pret.fini;
+          setPret(null);
+          rafraichirCompteurs();
+          terminer(fini);
+        }}
       />
     );
   }

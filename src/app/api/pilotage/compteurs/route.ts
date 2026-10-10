@@ -26,15 +26,17 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const maintenant = new Date();
-    const [tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter, propositionsEnAttente] = await Promise.all([
+    const [tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter, propositionsEnAttente, messagesAEnvoyer] = await Promise.all([
       compterAujourdhui(maintenant),
       compterLeadsEnRetard(),
       prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } }),
       rappelConnexionGoogle(),
       compterMailATraiter(maintenant),
       compterPropositionsEnAttente(),
+      // Mission 25 : le badge de la Messagerie, les messages prêts à envoyer (ajout seulement).
+      prisma.messagePrepare.count({ where: { statut: "A_ENVOYER" } }),
     ]);
-    return NextResponse.json({ tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter, propositionsEnAttente });
+    return NextResponse.json({ tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter, propositionsEnAttente, messagesAEnvoyer });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/pilotage/compteurs");
   }

@@ -31,10 +31,11 @@ describe("NavigationV2 : quatre entrées et Plus, aux adresses d'avant", () => {
     assert.match(navigation, /grid h-16 grid-cols-5/);
   });
 
-  test("Plus : Boîte mail, Simulateur, Site, Bilan, Réglages, À valider, et le retour à l'ancienne interface", () => {
+  test("Plus : Messagerie (mission 25), Boîte mail, Simulateur, Site, Bilan, Réglages, À valider, et le retour à l'ancienne interface", () => {
     const bloc = navigation.slice(navigation.indexOf("export const DANS_PLUS"), navigation.indexOf("const ENTREE_COMPTEE"));
     const entrees = [...bloc.matchAll(/href: "([^"]+)", libelle: "([^"]+)"/g)].map((m) => [m[1], m[2]]);
     assert.deepEqual(entrees, [
+      ["/messagerie", "Messagerie"],
       ["/mail", "Boîte mail"],
       ["/simulateur", "Simulateur"],
       ["/site", "Site"],

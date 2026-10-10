@@ -48,6 +48,26 @@ export async function iaDisponible(maintenant: Date): Promise<{ ok: boolean; rai
   return { ok: true, raison: null, depense, budget };
 }
 
+/**
+ * Lot 5 — l'alerte à 80 % du plafond de la messagerie : envoyée par l'appel qui franchit le seuil, donc une fois par
+ * mois (sans marque à garder) ; une seconde fois seulement si Lucas relève le plafond puis le franchit de nouveau.
+ */
+export async function surveillerBudget(depenseAvant: number, cout: number, budget: number): Promise<void> {
+  const seuil = budget * SEUIL_ALERTE;
+  if (!(depenseAvant < seuil && depenseAvant + cout >= seuil)) return;
+  const { prevenirLucas } = await import("./alertes");
+  const euros = (n: number) => n.toFixed(2).replace(".", ",");
+  await prevenirLucas({
+    titre: "IA de la messagerie : 80 % du budget du mois",
+    texte: `${euros(depenseAvant + cout)} € dépensés sur ${euros(budget)} € ce mois-ci. Au plafond, la messagerie continue par les règles fixes jusqu'au mois suivant.`,
+    chemin: "/parametres?section=assistant",
+    libelleLien: "Voir le budget",
+    urgence: 3,
+    etiquette: "messagerie-budget",
+    origine: "messagerie-budget",
+  });
+}
+
 const SYSTEME_ANALYSE = `Tu aides Lucas, artisan poseur de revêtements adhésifs (CoverSwap, près de Montpellier), à suivre ses clients.
 On te donne un dossier : ses faits, son journal, ses derniers échanges et les nouveaux éléments (messages du client, notes de Lucas).
 Rends, par l'outil, uniquement ce que les éléments disent :
@@ -165,7 +185,7 @@ export async function analyserParIa(
     1
   );
   try {
-    const { donnees } = await appelerModele(
+    const { donnees, coutEuros } = await appelerModele(
       {
         usage: "MESSAGERIE_ANALYSE",
         systeme: SYSTEME_ANALYSE,
@@ -175,6 +195,7 @@ export async function analyserParIa(
       },
       maintenant
     );
+    await surveillerBudget(dispo.depense, coutEuros, dispo.budget);
     const d = donnees as Record<string, unknown>;
     const faitsBruts = (d.faits ?? {}) as Partial<Faits>;
     const listes = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim().slice(0, 40)).slice(0, 4) : undefined);
@@ -228,7 +249,7 @@ export async function brouillonParIa(etat: EtatSuivi, maintenant: Date): Promise
     .slice(-6)
     .map((x) => x.t.slice(0, 300));
   try {
-    const { donnees } = await appelerModele(
+    const { donnees, coutEuros } = await appelerModele(
       {
         usage: "MESSAGERIE_REDACTION",
         systeme: SYSTEME_BROUILLON,
@@ -238,6 +259,7 @@ export async function brouillonParIa(etat: EtatSuivi, maintenant: Date): Promise
       },
       maintenant
     );
+    await surveillerBudget(dispo.depense, coutEuros, dispo.budget);
     const propose = texteCourt((donnees as { texte?: unknown }).texte, 500);
     if (!propose) return { texte: null, raison: "Le modèle n'a rien proposé." };
     const { controlerTexte } = await import("./controleur");
@@ -261,7 +283,7 @@ export async function personnaliserParIa(entree: { code: string; texteValide: st
   const f = entree.etat.faits;
   const faitsUtiles = { piece: entree.etat.piece.connue ? entree.etat.piece.nom : null, teintes_regardees: [...f.teintesFavorites, ...f.teintesEvoquees].slice(0, 3), decideur: f.decideur, objections: f.objections.slice(0, 2), prenom_fiable: entree.etat.prenom };
   try {
-    const { donnees } = await appelerModele(
+    const { donnees, coutEuros } = await appelerModele(
       {
         usage: "MESSAGERIE_PERSONNALISATION",
         systeme: SYSTEME_PERSONNALISATION,
@@ -271,6 +293,7 @@ export async function personnaliserParIa(entree: { code: string; texteValide: st
       },
       maintenant
     );
+    await surveillerBudget(dispo.depense, coutEuros, dispo.budget);
     return texteCourt((donnees as { texte?: unknown }).texte, 500);
   } catch (erreur) {
     if (!(erreur instanceof IaIndisponible)) console.error("[messagerie] personnalisation impossible, texte validé :", erreur);

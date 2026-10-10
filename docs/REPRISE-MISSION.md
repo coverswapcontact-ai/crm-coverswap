@@ -5852,3 +5852,15 @@ a8cfe0d, qui porte les missions 23-24 non poussées). Conception : `docs/MESSAGE
   (migration `sms-sans-presentation-25`, textes réécrits par Lucas gardés) ; Manuel et Active posés par défaut
   (`messagerie-reglages-25`) ; contrôleur sensible aux accents ; « nouvel intérieur ». Les 41 messages × 5 profils de
   clients rendus et contrôlés, liens iPhone et Android vérifiés. Tests : 1 805 → 1 823.
+- Lot 5 (IA, 10/10) : contrôleur des deux lignes « Où on en est » écrites par l'IA (dates absolues, longueurs ;
+  sinon les lignes des règles) ; alerte à 80 % du plafond de la messagerie (envoyée par l'appel qui franchit le seuil :
+  une fois par mois) ; tests au faux modèle (analyse, réponse écartée pour un prix, lignes écartées pour « demain »,
+  « comme convenu » personnalisé ou écarté pour « gratuit », brouillon ✨ contrôlé, plafond → règles fixes) ; rejeu à
+  blanc des 20 derniers événements réels (`/messagerie/rejeu`, menu de la Messagerie, `/api/messagerie/rejeu`) : règles
+  gratuites, IA au coût annoncé d'après les prix de Paramètres, rien d'écrit dans les dossiers. Notes vocales = dictée
+  du clavier (aucun audio gardé). Tests : 1 823 → 1 829 (un échec sous charge de `mission-15-partie-1`, l'exécuteur,
+  vert seul : piège connu).
+  **À faire par Lucas pour l'IA** : clé `ANTHROPIC_API_KEY` sur Railway ; dans Paramètres → Assistant : `IA_CRM_ACTIVE`
+  Active, `IA_MESSAGERIE` Active, `IA_MODELE` (Claude Haiku), ses deux prix, `IA_BUDGET_MENSUEL` ; puis le rejeu avec
+  l'IA (20 analyses : 0,20 € au plus aux prix de Claude Haiku, le montant exact s'affiche avant) pour la condition
+  de fin du lot 5.

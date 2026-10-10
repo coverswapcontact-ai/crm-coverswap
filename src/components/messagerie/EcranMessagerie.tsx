@@ -166,6 +166,9 @@ export function EcranMessagerie({ suiviInitial, unParUnInitial }: { suiviInitial
                   <button type="button" onClick={() => void creerDemo()} className={cn("flex min-h-[44px] w-full items-center rounded-[10px] px-2 text-left text-[14px] text-texte-2 hover:bg-surface-2", TRANS)}>
                     Créer le dossier « Démo Messagerie »
                   </button>
+                  <a href="/messagerie/rejeu" className="flex min-h-[44px] items-center rounded-[10px] px-2 text-[14px] text-texte-2 hover:bg-surface-2">
+                    Rejouer les 20 derniers événements (à blanc)
+                  </a>
                 </div>
               ) : null}
             </div>

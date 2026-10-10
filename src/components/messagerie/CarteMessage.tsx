@@ -18,8 +18,8 @@ import { TRANS } from "@/components/pilotage/ui";
  * programmé se fait « Maintenant » ou s'annule. Rien ne part d'ici : Lucas envoie depuis son téléphone.
  */
 
-export const BOUTON_PRINCIPAL = cn("flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[12px] bg-action px-4 text-[16px] font-semibold text-action-texte hover:bg-action-clair", TRANS);
-export const BOUTON_SECONDAIRE_M = cn("flex min-h-[44px] items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] border-trait px-3 text-[14px] text-texte-2 hover:border-trait-2 hover:text-texte", TRANS);
+export const BOUTON_PRINCIPAL = cn("flex min-h-[48px] w-full items-center justify-center gap-2 rounded-[12px] bg-action px-4 text-[16px] font-semibold text-action-texte hover:bg-action-clair disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-action", TRANS);
+export const BOUTON_SECONDAIRE_M = cn("flex min-h-[44px] items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] border-trait px-3 text-[14px] text-texte-2 hover:border-trait-2 hover:text-texte disabled:cursor-not-allowed disabled:opacity-50", TRANS);
 
 const PLUS_TARD = [
   { valeur: "1H", libelle: "Dans 1 h" },

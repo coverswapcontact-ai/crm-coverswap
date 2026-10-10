@@ -334,7 +334,7 @@ describe("« lister » JOURNAL et « etat_crm » : depuis ta dernière visite (m
     assert.ok(r.liens?.some((l) => l.href.endsWith("/journal")));
   });
 
-  test("JOURNAL vue TOUT avec filtres.filtre ARGENT et du/au : seulement l'argent, sur la période ; un filtre imbriqué, donc l'empreinte ne bouge pas (53 outils, 6665a6b457fe avant comme après A1)", async () => {
+  test("JOURNAL vue TOUT avec filtres.filtre ARGENT et du/au : seulement l'argent, sur la période ; un filtre imbriqué, donc l'empreinte ne bouge pas (53 outils, 6665a6b457fe avant comme après A1 ; mission 25 : 62 outils, 078a14e54436)", async () => {
     const { jourParis } = await import("@/lib/dossiers/dates");
     const au = jourParis(new Date());
     const du = jourParis(new Date(Date.now() - 3 * 86_400_000));
@@ -347,7 +347,8 @@ describe("« lister » JOURNAL et « etat_crm » : depuis ta dernière visite (m
     assert.match(r.texte, /^Journal du .* au .* : \d+ faits? \(clients \d+, argent \d+, système \d+\), argent seulement : \d+ lignes?\./);
     const { registreOutils } = await import("@/lib/assistant/couverture");
     const registre = registreOutils();
-    assert.deepEqual([registre.nombre, registre.empreinte, registre.outils.find((o) => o.nom === "lister")?.parametres], [53, "6665a6b457fe", ["filtres", "liste", "page", "par_page", "recherche", "vue"]]);
+    // Mission 25 (lot 7) : les 9 outils de la messagerie s'ajoutent ; « lister » ne change pas.
+    assert.deepEqual([registre.nombre, registre.empreinte, registre.outils.find((o) => o.nom === "lister")?.parametres], [62, "078a14e54436", ["filtres", "liste", "page", "par_page", "recherche", "vue"]]);
   });
 
   test("« etat_crm » sans partie dit « Depuis ta dernière visite : N faits (clients K, argent M, système P) » et rend donnees.depuisVisite ; après « Tout vu », le compte repart de zéro", async () => {

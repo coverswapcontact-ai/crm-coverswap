@@ -138,7 +138,7 @@ export const outilNoterAppel = definirOutil({
   nom: "noter_appel",
   titre: "Noter un appel",
   description:
-    "Note un appel avec son issue (INTERESSE, A_RAPPELER, PAS_DE_REPONSE, PAS_INTERESSE), un texte, des étiquettes (TROP_CHER, VEUT_REFLECHIR, LOCATAIRE, PROJET_LOINTAIN, COMPARE_DEVIS, VEUT_UN_RENDU, DEJA_DECIDE, PAS_JOIGNABLE) et, pour « à rappeler » ou « pas de réponse », le moment du rappel (« jeudi 14h », « demain » ; sans moment : demain 18 h pour « pas de réponse », sans date pour « à rappeler »). « Intéressé » ouvre son dossier et son espace ; « pas intéressé » exige motif_perte (le lead passe sans suite, ou le dossier perdu : sensible, aperçu puis confirmation, comme « changer_etape » Perdu). Écrit sur le dossier s'il existe, sinon sur le lead. La réponse donne le SMS proposé (code et texte, le lien de l'espace compris pour « intéressé ») : rien n'est envoyé, lis-le à Lucas, il le copie dans Messages ; quand il dit l'avoir envoyé, « noter_sms » avec ce code.",
+    "Note un appel avec son issue (INTERESSE, A_RAPPELER, PAS_DE_REPONSE, PAS_INTERESSE), un texte, des étiquettes (TROP_CHER, VEUT_REFLECHIR, LOCATAIRE, PROJET_LOINTAIN, COMPARE_DEVIS, VEUT_UN_RENDU, DEJA_DECIDE, PAS_JOIGNABLE) et, pour « à rappeler » ou « pas de réponse », le moment du rappel (« jeudi 14h », « demain » ; sans moment : demain 18 h pour « pas de réponse », sans date pour « à rappeler »). « Intéressé » ouvre son dossier et son espace ; « pas intéressé » exige motif_perte (le lead passe sans suite, ou le dossier perdu : sensible, aperçu puis confirmation, comme « changer_etape » Perdu). Écrit sur le dossier s'il existe, sinon sur le lead. La réponse donne le SMS proposé (code et texte, le lien de l'espace compris pour « intéressé ») : rien n'est envoyé, lis-le à Lucas, il le copie dans Messages ; quand il dit l'avoir envoyé, « noter_sms » avec ce code. Mission 25 : quand la messagerie est en service, c'est elle qui prépare la suite (A2, A4, P1…) — la réponse donne ce message et son id, à confirmer par « confirmer_envoi » une fois parti.",
   niveau: "REVERSIBLE",
   schema: schemaCible.extend({
     issue: z.enum(ISSUES_APPEL),
@@ -179,14 +179,41 @@ export const outilNoterAppel = definirOutil({
     // mail proposé ; une fois envoyé, « noter_sms » trace la copie.
     const lignes = [`${suite.resume} (${r.ids.nom})`];
     if (suite.proposerSansSuite) lignes.push(`${suite.tentatives}ᵉ appel sans réponse d'affilée : propose à Lucas de classer sans suite (motif « Plus de réponse »), sans l'imposer.`);
-    if (suite.sms) lignes.push(`SMS proposé (${suite.sms.code}) : « ${suite.sms.texte} » — une fois envoyé, dis-le-moi (« noter_sms »).`);
+    // Mission 25 (lot 7) : la messagerie en service prépare la suite de l'appel (A2, A4, A5, P1…) ; elle remplace l'ancien
+    // SMS proposé (pas de doublon) et se confirme par « confirmer_envoi ».
+    const preparesParLaMessagerie = await suiteDeLaMessagerie(suite.dossierId ?? null, suite.leadId ?? null, contexte.maintenant);
+    if (preparesParLaMessagerie) {
+      lignes.push(
+        ...(preparesParLaMessagerie.length
+          ? preparesParLaMessagerie.map((m) => `Préparé par la messagerie : ${m.libelle}${m.prevu ? ` (prévu ${m.prevu})` : ""}, id ${m.id} : « ${m.texte} » — rien n'est envoyé ; une fois parti du téléphone, « confirmer_envoi ».`)
+          : ["La messagerie n'a rien préparé de plus pour l'instant (garde de silence, horaires ou message déjà en attente)."])
+      );
+    } else if (suite.sms) lignes.push(`SMS proposé (${suite.sms.code}) : « ${suite.sms.texte} » — une fois envoyé, dis-le-moi (« noter_sms »).`);
     return {
       texte: lignes.join("\n"),
-      donnees: suite,
+      donnees: { ...suite, ...(preparesParLaMessagerie ? { sms: null, messagerie: preparesParLaMessagerie } : {}) },
       liens: [suite.dossierId ? lien("Dossier", `/dossiers?dossier=${suite.dossierId}`) : lien("Lead", `/leads?lead=${suite.leadId}`)],
     };
   },
 });
+
+/**
+ * Mission 25 (lot 7) — après un appel noté par Claude : si la messagerie est en service, son analyse tout de suite (le
+ * même chemin que la feuille de fin d'appel) et les messages qu'elle vient de préparer. Null : messagerie pas encore en
+ * service (l'ancien SMS proposé reste).
+ */
+async function suiteDeLaMessagerie(dossierId: string | null, leadId: string | null, maintenant: Date): Promise<{ id: string; libelle: string; texte: string; prevu: string | null }[] | null> {
+  const { messagerieEnService, suiviPour } = await import("@/lib/messagerie/suivis");
+  if (!(await messagerieEnService(maintenant))) return null;
+  const suivi = await suiviPour({ dossierId: dossierId ?? undefined, leadId: dossierId ? undefined : (leadId ?? undefined) }, { geste: true });
+  if (!suivi) return [];
+  const { analyserSuivi } = await import("@/lib/messagerie/analyse");
+  const { libelleDuCode } = await import("@/lib/messagerie/redaction");
+  const { dateAbsolue } = await import("@/lib/messagerie/horaires");
+  const { crees } = await analyserSuivi(suivi.id, maintenant);
+  const messages = crees.length ? await prisma.messagePrepare.findMany({ where: { id: { in: crees } }, orderBy: { prevuLe: "asc" } }) : [];
+  return messages.map((m) => ({ id: m.id, libelle: libelleDuCode(m.code), texte: m.texte, prevu: m.statut === "PREVU" ? dateAbsolue(m.prevuLe) : null }));
+}
 
 export const outilPlanifier = definirOutil({
   nom: "planifier",

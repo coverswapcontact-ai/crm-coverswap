@@ -223,6 +223,19 @@
   `simulations[].fidelite` (`resume`, puis par zone : état, ΔE avant / après, à clarté égale, raison). Aucun paramètre ni
   clé de premier niveau ajouté, description de `voir_fichiers` inchangée : empreinte avant **`6665a6b457fe`** → après
   **`6665a6b457fe`** (53 outils). Écran : badge après « contrôle » dans la liste des simulations du dossier (v1 et v2).
+- **Mission 25, lot 7 (10/10/2026)** : la messagerie pilotée depuis Claude — neuf outils (`assistant/outils/messagerie.ts`),
+  mêmes gestes que les boutons, rien n'est envoyé par eux : **file_du_jour** (lecture : l'ordre du mode « Un par un »,
+  le texte et l'id de chaque message), **confirmer_envoi** (« Envoyé à Mme X à 14 h 20 », `message_id` ou `cible`,
+  `texte` réellement envoyé, `heure`), **noter_reponse_client** (`texte`, `heure`, `photos` → lien de dépôt du dossier ;
+  l'analyse suit et la réponse préparée est rendue), **noter_note** (la note puis l'analyse : rappel, pause « va
+  signer », faits), **reponse_proposee** (lecture), **reporter_message** (`quand` : 1H, 3H, DEMAIN ou une date),
+  **non_envoye** (`raison` : DEJA_FAIT_TELEPHONE, PLUS_PERTINENT, AUTRE + `commentaire`), **pause_client** (`jusqua`, sans
+  date : reprise), **ou_en_est** (lecture : trois lignes et dix lignes de journal ; jamais lu par la messagerie : la règle,
+  sans rien écrire). Niveaux : lecture pour les trois lectures, écriture réversible pour les six autres (aucune n'envoie,
+  aucune ne touche à l'argent). Alignement : `noter_appel` rend le message que la messagerie vient de préparer (A2, A4,
+  P1…) à la place de l'ancien SMS proposé dès que la messagerie est en service ; `noter_sms` renvoie vers
+  `confirmer_envoi` pour un message préparé. Empreinte avant **`6665a6b457fe`** (53 outils) → après **`078a14e54436`**
+  (62 outils) : **reconnecter le connecteur** dans l'application Claude.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -928,6 +941,22 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
 - **Après la mission 18, A6 (03/10/2026)** : les tarifs passent dans Paramètres › Tarifs (DP64, DP70–DP73 en 2.13) :
   le panneau du dossier passe à 92 actions (91 couvertes, 1 sans objet), Paramètres › Tarifs compte 5 actions (5
   couvertes). Total inchangé : **427 actions, 391 couvertes, 36 sans objet**, 0 partielle, 0 manquante.
+
+### 2.20 Messagerie (`/messagerie`, mission 25)
+
+| Geste de l'écran | Outil |
+|---|---|
+| File « Un par un » (réponses, messages dus, appels, propositions) | `file_du_jour` |
+| ✅ Envoyé, « Je l'avais envoyé » (texte modifié, heure) | `confirmer_envoi` |
+| « Sa réponse » (texte, heure, photos) | `noter_reponse_client` (photos : lien de dépôt) |
+| 📝 Note | `noter_note` |
+| La réponse préparée d'une conversation | `reponse_proposee` |
+| Plus tard (1 h, 3 h, demain 9 h 30) | `reporter_message` (et une date) |
+| Ne pas envoyer (raison) | `non_envoye` |
+| Pause du client, reprise | `pause_client` |
+| « Où on en est » et le journal | `ou_en_est` (tout le dossier : `lire_fiche`) |
+| Fin d'appel « Qu'est-ce qui s'est dit ? » | `noter_appel` (la suite préparée par la messagerie) |
+| Valider une proposition (démarrage en douceur), STOP, archiver la conversation, Rapides Q1–Q8, ✨ brouillon, « Tout mettre en pause », Démo, rejeu, tableau de bord | manques assumés : gestes d'écran (Lucas les fait au téléphone) ; STOP reste reconnu dans `noter_reponse_client` |
 
 ### 2.18 Journal « Depuis ta dernière visite » (`/journal`, mission 22, interface v2)
 

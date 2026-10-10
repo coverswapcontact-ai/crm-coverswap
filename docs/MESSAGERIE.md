@@ -122,3 +122,31 @@ groupe IA : `IA_MESSAGERIE` (interrupteur), `IA_MESSAGERIE_BUDGET` (10 € sans 
 - **Espace perdu dans le JSX** : un texte qui suit une expression et contient une entité (`&apos;`) perd son espace de
   tête à la compilation (« 0 rappelaujourd'hui ») : écrire ces phrases en chaîne JavaScript (`{`…`}`).
 
+- **Écran Validation** : les messages à valider de la messagerie (propositions du démarrage en douceur, dossiers
+  sensibles) se valident dans la Messagerie (carte « À valider », mode « Un par un », `confirmer_envoi` depuis Claude),
+  pas dans l'écran Validation : un même message à deux endroits se validerait deux fois. L'écran Validation garde les
+  mails et les propositions d'avant.
+- **Vérifications sur vraies données** : la mission n'a pas accès à l'interface de production (connexion de Lucas) ;
+  « la file du jour juste sur 5 vrais dossiers » et « 20 événements réels rejoués » se font par la recette (points 7
+  et 8) et par le rejeu à blanc de la Messagerie (règles : gratuit ; IA : après sa mise en route).
+
+## 6. Lots 8 et 9 : ce qui reste
+
+**Lot 8 — passerelle Android.** Prérequis : le forfait de l'Android autorise les envois automatisés (sinon OVH avec un
+autre numéro, cahier § Android). Côté code :
+- un fournisseur `android` dans `src/lib/sms/fournisseurs` (API de SMS Gateway for Android : envoi, état, réception
+  par webhook signé ; clés sur Railway, posées par Lucas) ;
+- le départ automatique dans `moteur.ts › traiterEcheances` : en mode ANDROID, un message `A_ENVOYER` dont le mode est
+  AUTO (ou VALIDATION déjà validé par Lucas) part par le fournisseur à son heure, après la garde, avec la mention STOP du
+  premier SMS (`vues.ts › texteAEnvoyer`) ; `confirmerEnvoi` est appelé par l'accusé du fournisseur (origine ANDROID) ;
+- la réception : le webhook range le SMS reçu (`SMS_RECU`, photos MMS dans l'espace) et déclenche l'analyse 90 s après
+  le dernier message (déjà en place par `signalerChangementTaches`) ;
+- une « semaine à blanc » : mode ANDROID_ESSAI qui écrit au journal « serait parti » sans appeler le fournisseur ;
+- `envoyerAccuseParFournisseur` (gardé) n'est plus nécessaire : A1 part comme les autres messages Auto.
+
+**Lot 9 — appels automatiques.** MacroDroid signale chaque appel par un webhook signé (`/api/messagerie/appels`,
+secret sur Railway) : numéro, sens, durée, manqué ou non. Un appel sortant terminé ouvre la carte « Qu'est-ce qui s'est
+dit ? » sur l'iPhone (notification) ; un appel entrant manqué aux heures de travail prépare A3 (une fois par jour et par
+numéro) ; chaque appel compte pour la garde de silence (« appel de moins de 72 h ») sans que Lucas le saisisse. Les
+appels ne sont jamais enregistrés ni écoutés.
+

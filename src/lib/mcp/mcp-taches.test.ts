@@ -369,10 +369,10 @@ describe("lots de ménage (T33, T34, T35) : revoir, tout classer, annuler — co
 });
 
 describe("le catalogue et un vrai client MCP", () => {
-  test("53 outils (partie C : outils génériques) : « taches » en lecture, « repondre_tache » et « creer » en écriture réversible ; tools/list les expose ; « taches » répond par le client", async () => {
+  test("62 outils (partie C : outils génériques ; mission 25 : les 9 outils de la messagerie) : « taches » en lecture, « repondre_tache » et « creer » en écriture réversible ; tools/list les expose ; « taches » répond par le client", async () => {
     const { registreOutils } = await import("@/lib/assistant/couverture");
     const registre = registreOutils();
-    assert.equal(registre.nombre, 53);
+    assert.equal(registre.nombre, 62);
     const outil = (nom: string) => registre.outils.find((o) => o.nom === nom);
     assert.deepEqual([outil("taches")?.niveau, outil("taches")?.parametres], ["LECTURE", ["lot", "minutes", "vue"]]);
     assert.deepEqual([outil("repondre_tache")?.niveau, outil("repondre_tache")?.parametres], ["REVERSIBLE", ["le", "motif_perte", "precision", "quand", "raison", "reponse", "tache", "texte"]]);

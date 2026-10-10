@@ -15,6 +15,7 @@ import { OUTILS_GESTES } from "./outils/gestes";
 import { OUTILS_LECTURE } from "./outils/lecture";
 import { OUTILS_LISTER } from "./outils/lister";
 import { OUTILS_MAIL } from "./outils/mail";
+import { OUTILS_MESSAGERIE_ECRITURE, OUTILS_MESSAGERIE_LECTURE } from "./outils/messagerie";
 import { OUTILS_RELANCES_ECRITURE } from "./outils/relances";
 import { OUTILS_SIMULATION } from "./outils/simulation";
 import { OUTILS_SMS } from "./outils/sms";
@@ -46,6 +47,7 @@ export const CATALOGUE: OutilQuelconque[] = [
   ...OUTILS_TACHES_LECTURE, // taches
   ...OUTILS_ANALYTIQUE, // analytique
   outilPointDuJour,
+  ...OUTILS_MESSAGERIE_LECTURE, // file_du_jour, reponse_proposee, ou_en_est (mission 25)
   ...OUTILS_ANALYSE,
   ...OUTILS_MAIL,
   // Écriture
@@ -59,6 +61,7 @@ export const CATALOGUE: OutilQuelconque[] = [
   ...OUTILS_SIMULATION,
   ...OUTILS_GESTES, // publier, traiter_mail, geste_espace, doublon, anonymiser_client, agir_systeme
   ...OUTILS_TACHES_ECRITURE, // repondre_tache
+  ...OUTILS_MESSAGERIE_ECRITURE, // confirmer_envoi, noter_reponse_client, noter_note, reporter_message, non_envoye, pause_client (mission 25)
 ];
 
 // Mission 17 (partie C) : un outil retiré ne revient jamais sous le même nom (les consignes en base le traduisent).

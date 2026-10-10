@@ -9,6 +9,9 @@ import { listeTaches } from "./lecture";
 
 /**
  * Mission 17 (partie A, lot 2) : la notification du matin — « Tâches du jour : 7 tâches aujourd'hui, environ 45 min ».
+ * Mission 25 (lot 7) : « Brief du matin » quand la messagerie a quelque chose pour aujourd'hui — « Aujourd'hui : 4
+ * messages à envoyer, 2 réponses à traiter, 1 rappel promis à 14 h. » avant les tâches (messagerie/brief.ts) ; elle part
+ * aussi un jour sans tâche s'il y a des messages.
  * Une fois par jour, à partir de 8 h (Paris), sur les canaux poussés (Telegram, ntfy, push web), si le paramètre
  * NOTIF_TACHES_MATIN vaut Oui (Oui quand il n'a jamais été saisi) et qu'il y a au moins une tâche aujourd'hui.
  * Dédoublonnée par le registre des alertes (AlerteEnvoi, origine « taches-matin », jour de Paris) : un redémarrage ne
@@ -51,10 +54,21 @@ export async function notifierTachesDuMatin(maintenant: Date = new Date()): Prom
     return { envoyee: false, raison: "déjà envoyée aujourd'hui" };
   }
   const { compteurs } = await listeTaches(maintenant);
-  if (compteurs.aujourdhui === 0) return { envoyee: false, raison: "aucune tâche aujourd'hui" };
-  const texte = `${pluriel(compteurs.aujourdhui, "tâche", "tâches")} aujourd'hui, environ ${dureeLisible(compteurs.minutesAujourdhui)}`;
+  // Mission 25 (lot 7) : le brief de la messagerie en tête (« Aujourd'hui : 4 messages à envoyer, 2 réponses à traiter,
+  // 1 rappel promis à 14 h »), quand elle a quelque chose pour aujourd'hui ; les tâches suivent.
+  const brief = await (await import("@/lib/messagerie/brief")).briefDuJour(maintenant).catch((e: unknown) => {
+    console.error("[matin] brief de la messagerie indisponible :", e);
+    return null;
+  });
+  if (compteurs.aujourdhui === 0 && !brief?.texte) return { envoyee: false, raison: "aucune tâche aujourd'hui" };
+  const taches = compteurs.aujourdhui ? `${pluriel(compteurs.aujourdhui, "tâche", "tâches")} aujourd'hui, environ ${dureeLisible(compteurs.minutesAujourdhui)}` : null;
+  const texte = [brief?.texte ?? null, taches].filter(Boolean).join(" ");
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
   memoire[CLE_MEMOIRE] = jour;
-  await alerter({ titre: "Tâches du jour", texte, lien: `${appUrl}/taches`, libelleLien: "Voir mes tâches", etiquette: "taches-matin" }, { canaux: CANAUX_PUSH, origine: ORIGINE_MATIN });
+  const versMessagerie = Boolean(brief?.texte && (brief.messages || brief.reponses || brief.propositions));
+  await alerter(
+    { titre: brief?.texte ? "Brief du matin" : "Tâches du jour", texte, lien: versMessagerie ? `${appUrl}/messagerie?vue=un-par-un` : `${appUrl}/taches`, libelleLien: versMessagerie ? "Un par un" : "Voir mes tâches", etiquette: "taches-matin" },
+    { canaux: CANAUX_PUSH, origine: ORIGINE_MATIN }
+  );
   return { envoyee: true, raison: "envoyée", texte };
 }

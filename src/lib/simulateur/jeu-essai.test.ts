@@ -255,6 +255,7 @@ describe("GET /api/simulateur/jeu-essai et « agir_systeme » EXPORTER_JEU_ESSAI
     assert.ok(!r.images?.length, "pas de zip dans le résultat");
     const { registreOutils } = await import("@/lib/assistant/couverture");
     const registre = registreOutils();
-    assert.deepEqual([registre.nombre, registre.empreinte], [53, "6665a6b457fe"]);
+    // Mission 25 (lot 7) : 9 outils de la messagerie en plus.
+    assert.deepEqual([registre.nombre, registre.empreinte], [62, "078a14e54436"]);
   });
 });

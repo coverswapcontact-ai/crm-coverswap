@@ -94,9 +94,9 @@ after(async () => {
 });
 
 describe("le catalogue expose les deux nouveaux outils", () => {
-  test("53 outils (mission 17, partie C : les outils génériques remplacent 45 outils d'un seul geste) : « lister » (ex-« leads_a_rappeler ») en lecture, « noter_sms » en écriture réversible ; le serveur MCP les expose tous", async () => {
+  test("62 outils (mission 17, partie C : les outils génériques remplacent 45 outils d'un seul geste ; mission 25 : 9 outils de la messagerie) : « lister » (ex-« leads_a_rappeler ») en lecture, « noter_sms » en écriture réversible ; le serveur MCP les expose tous", async () => {
     const registre = couverture.registreOutils();
-    assert.equal(registre.nombre, 53);
+    assert.equal(registre.nombre, 62, "mission 25 : les 9 outils de la messagerie s'ajoutent");
     const rappeler = registre.outils.find((o) => o.nom === "lister");
     const noterSms = registre.outils.find((o) => o.nom === "noter_sms");
     assert.deepEqual([rappeler?.niveau, rappeler?.famille, rappeler?.parametres], ["LECTURE", "LECTURE", ["filtres", "liste", "page", "par_page", "recherche", "vue"]]);
@@ -113,7 +113,7 @@ describe("le catalogue expose les deux nouveaux outils", () => {
     await client.connect(versClient);
     const outils = await client.listTools();
     assert.deepEqual(couverture.ecartAvecLeServeur(outils.tools.map((t) => t.name)), { manquants: [], enTrop: [] });
-    assert.equal(outils.tools.length, 53);
+    assert.equal(outils.tools.length, 62);
     const niveau = (nom: string) => outils.tools.find((t) => t.name === nom)?.description?.match(/^\[([^\]]+)\]/)?.[1];
     assert.deepEqual([niveau("lister"), niveau("noter_sms")], ["Lecture", "Écriture réversible"]);
     const ressource = await client.readResource({ uri: "coverswap://consignes" });

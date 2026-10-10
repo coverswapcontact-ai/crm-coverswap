@@ -240,6 +240,8 @@ export async function passeMoteur(maintenant: Date = new Date()): Promise<{ paus
   const { aEnvoyer } = await traiterEcheances(maintenant);
   const nonConfirmes = await marquerNonConfirmes(maintenant);
   await notifierPrets(maintenant);
+  // Lot 7 : le lundi à partir de 9 h, l'alerte STOP de la semaine passée (au-dessus de 3 %), une fois.
+  await (await import("./tableau")).surveillerStop(maintenant).catch((e: unknown) => console.error("[messagerie] alerte STOP :", e));
   return { pause: false, crees, revus: aRevoir.length, aEnvoyer, nonConfirmes };
 }
 

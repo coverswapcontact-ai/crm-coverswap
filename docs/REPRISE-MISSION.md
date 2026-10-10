@@ -5876,3 +5876,51 @@ a8cfe0d, qui porte les missions 23-24 non poussées). Conception : `docs/MESSAGE
   détecteur RELANCES vide, ses tâches ouvertes « Pas à faire : relance confiée à la messagerie » (pas « Faite ») ;
   « relances proposables » de l'écran Leads remplacé par « N messages à envoyer » ; carte de relance de la fiche
   remplacée par la section Conversation. Tests : 1 829 → 1 837.
+- Lot 7 (MCP, brief, mesures, 10/10) : neuf outils MCP (`assistant/outils/messagerie.ts` : file_du_jour, confirmer_envoi,
+  noter_reponse_client — photos par lien de dépôt —, noter_note, reponse_proposee, reporter_message, non_envoye,
+  pause_client, ou_en_est), rien n'est envoyé par eux ; `noter_appel` rend la suite préparée par la messagerie (plus
+  l'ancien SMS proposé) dès qu'elle est en service, `noter_sms` renvoie vers `confirmer_envoi` ; registre 53 → **62
+  outils**, empreinte `6665a6b457fe` → **`078a14e54436`** (docs/MCP-COUVERTURE.md § 1 et § 2.20) : **reconnecter le
+  connecteur**. Brief de 8 h (`messagerie/brief.ts`) en tête de la notification du matin : « Aujourd'hui : 4 messages
+  à envoyer, 2 réponses à traiter, 1 rappel promis à 14 h. », propositions à valider, signaux chauds ; elle part aussi
+  un jour sans tâche. Tableau de bord hebdomadaire `/messagerie/tableau` (`messagerie/tableau.ts`) : préparés, envoyés,
+  reportés, refusés, non confirmés, taux et délai de réponse (par semaine et par message), retenues de la garde par
+  motif, STOP (alerte le lundi 9 h au-dessus de 3 %, `surveillerStop` dans le moteur), devis signés après une relance,
+  coût de l'IA du mois. Tests : 1 837 → 1 843.
+
+## Fin de mission 25 (10/10/2026)
+- **Livré** : lots 1 à 7 sur la branche `mission-25` (commits 2482d96, accec6a, aa99b12, a117e40 et le lot 7), mode
+  d'envoi **Manuel** (aucun SMS ne part seul), IA en pause tant que Lucas ne l'active pas (règles fixes à la place).
+- **Ce qui attend Lucas** :
+  1. Reconnecter le connecteur MCP dans l'application Claude (62 outils, empreinte `078a14e54436`).
+  2. Paramètres → SMS : coller le lien direct de la fiche Google (avis) ; relire au besoin les 41 messages.
+  3. Leads : « Archiver les anciens leads » (le bouton montre le nombre ; réversible).
+  4. Facultatif, l'IA de la messagerie : clé `ANTHROPIC_API_KEY` sur Railway ; Paramètres → Assistant : `IA_CRM_ACTIVE`
+     Active, `IA_MESSAGERIE` Active, `IA_MODELE` (Claude Haiku), ses deux prix, `IA_BUDGET_MENSUEL` ; puis
+     Messagerie → menu → « Rejouer les 20 derniers événements » avec l'IA (0,20 € au plus, montant affiché avant).
+  5. La recette ci-dessous, puis archiver le dossier « Démo Messagerie » (Leads → fiche → Archiver).
+- **Recette en 10 points (iPhone)** :
+  1. Installer le CRM sur l'écran d'accueil (Safari → Partager → Sur l'écran d'accueil), l'ouvrir, accepter les
+     notifications (bandeau de la Messagerie).
+  2. Messagerie → menu ⋯ → « Créer le dossier « Démo Messagerie » » : l'alerte « Message prêt » arrive sur l'iPhone.
+  3. Ouvrir la carte A1 → « Ouvrir Messages » (numéro et texte remplis, numéro de fiction : ne pas envoyer pour de vrai)
+     → revenir → ✅ Envoyé.
+  4. « Sa réponse » : coller « Voici mes photos, je suis dispo jeudi après-midi », joindre une photo → la réponse
+     proposée apparaît (S1 ou E3) et la photo est dans l'espace du dossier Démo.
+  5. 📝 Note avec la dictée du clavier (« intéressée, veut du chêne clair, signe dans 2 semaines ») : rappel posé,
+     « Où on en est » change, « comme convenu » préparé pour le jour J.
+  6. « Aujourd'hui : N à faire » → mode « Un par un » jusqu'à « Tout est traité pour aujourd'hui ».
+  7. « Où on en est » sur trois vrais dossiers (fiche dossier : en tête ; Dossiers et Leads : la ligne Situation).
+  8. Dans Claude (connecteur reconnecté) : « Lis-moi la file du jour » (outil `file_du_jour`).
+  9. Messagerie → menu → « Tout mettre en pause » (bandeau), puis « Relancer la messagerie ».
+  10. Leads → « Archiver les anciens leads (N) » : le nombre, la confirmation, puis le compteur à 0 (« Annuler » les rend).
+- **Lots 8 et 9 (après la mission)** — détail technique : docs/MESSAGERIE.md § 6.
+  - Lot 8, passerelle Android : vérifier d'abord que le forfait de l'Android autorise les envois automatisés (point du
+    cahier encore ouvert) ; fournisseur « android » (SMS Gateway for Android : envoi par son API, réception par webhook
+    signé), clés posées par Lucas sur Railway ; bascule `MESSAGERIE_MODE_ENVOI` → Android (seuls les messages Auto et
+    ceux validés partent seuls, horaires et garde inchangés) ; une semaine à blanc (envois simulés, journal) avant le
+    vrai départ ; `envoyerAccuseParFournisseur` est gardé pour ce lot.
+  - Lot 9, appels automatiques : MacroDroid sur l'Android signale chaque appel (webhook signé, secret posé par Lucas) :
+    appel sortant → la carte « Qu'est-ce qui s'est dit ? » sans rien taper, appel entrant manqué → A3 (déjà dans la
+    liste, préparé dès que l'appel est signalé), et la garde de silence voit les appels sans saisie.
+

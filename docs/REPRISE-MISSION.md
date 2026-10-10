@@ -5889,8 +5889,11 @@ a8cfe0d, qui porte les missions 23-24 non poussées). Conception : `docs/MESSAGE
   coût de l'IA du mois. Tests : 1 837 → 1 843.
 
 ## Fin de mission 25 (10/10/2026)
-- **Livré** : lots 1 à 7 sur la branche `mission-25` (commits 2482d96, accec6a, aa99b12, a117e40 et le lot 7), mode
-  d'envoi **Manuel** (aucun SMS ne part seul), IA en pause tant que Lucas ne l'active pas (règles fixes à la place).
+- **Livré et déployé** (10/10, ~18 h 35) : lots 1 à 7 (commits 2482d96, accec6a, aa99b12, a117e40, cc7e891), poussés
+  sur `main` avec les missions 23-24 (inertes par défaut : correction derrière un réglage désactivé, scripts) ;
+  `/api/health` de production : commit `cc7e891`, 62 outils, empreinte `078a14e54436`. Mode d'envoi **Manuel** (aucun
+  SMS ne part seul), IA en pause tant que Lucas ne l'active pas (règles fixes à la place). Tests 1 763 → 1 843, tsc et
+  lint à 0, build vert ; aucune dépense (aucun appel payant).
 - **Ce qui attend Lucas** :
   1. Reconnecter le connecteur MCP dans l'application Claude (62 outils, empreinte `078a14e54436`).
   2. Paramètres → SMS : coller le lien direct de la fiche Google (avis) ; relire au besoin les 41 messages.

@@ -48,3 +48,28 @@ export async function appliquerActionLeads(entree: z.output<typeof schemaActionL
   await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return { ids: changes };
 }
+
+/**
+ * Mission 25 (lot 6) — « Archiver les anciens leads » : les leads encore « À appeler » reçus avant la campagne Meta du
+ * 25/09/2026 (220 sur 229 le 10/10). Le bouton de l'écran Leads montre leur nombre exact, puis Lucas archive d'un
+ * geste, avec le motif « Ancien lead, avant la campagne du 25/09 ». Réversible (Archivés → Restaurer, ou « Annuler »),
+ * et ils restent disponibles pour une campagne de réactivation. Rien n'est archivé sans ce geste ; un dossier déjà
+ * ouvert n'est jamais touché.
+ */
+export const MOTIF_ANCIEN_LEAD = "Ancien lead, avant la campagne du 25/09";
+
+export async function archiverAnciensLeads(maintenant: Date = new Date()): Promise<{ ids: string[] }> {
+  const { whereAnciensLeads } = await import("./leads");
+  const anciens = await prisma.lead.findMany({ where: whereAnciensLeads(maintenant), select: { id: true } });
+  const ids: string[] = [];
+  for (const lead of anciens) {
+    await prisma.lead.update({ where: { id: lead.id }, data: { archiveLe: maintenant, archiveMotif: MOTIF_ANCIEN_LEAD } });
+    ids.push(lead.id);
+  }
+  if (ids.length) {
+    await synchroniserRappels(ids.map((id) => ({ type: "LEAD" as const, id })));
+    await signalerChangementTaches();
+  }
+  return { ids };
+}
+

@@ -5864,3 +5864,15 @@ a8cfe0d, qui porte les missions 23-24 non poussées). Conception : `docs/MESSAGE
   Active, `IA_MESSAGERIE` Active, `IA_MODELE` (Claude Haiku), ses deux prix, `IA_BUDGET_MENSUEL` ; puis le rejeu avec
   l'IA (20 analyses : 0,20 € au plus aux prix de Claude Haiku, le montant exact s'affiche avant) pour la condition
   de fin du lot 5.
+- Lot 6 (Leads et fiche dossier, 10/10) : écran Leads ouvert sur « À appeler » (plus jamais sur « À rappeler », sauf
+  `?liste=rappeler`) ; bouton « Archiver les anciens leads (N) » — leads « À appeler » reçus avant le 25/09/2026, motif
+  « Ancien lead, avant la campagne du 25/09 », « Annuler » les rend (`POST /api/leads/anciens`, rien archivé par la
+  mission) ; chaque ligne Leads et Dossiers : la ligne Situation de « Où on en est » et les boutons ronds 📞 💬 ✉️
+  (`BoutonsContact`) ; fiche dossier v1 : en tête nom, étape, ville, « Où on en est », 📞 Appeler · 💬 SMS · ✉️ Copier
+  le mail · 📋 Copier le numéro (« Copié ✅ »), puis neuf sections repliables avec leur résumé d'une ligne (🎯 Prochaine
+  action ouverte, 💬 Conversation avec les messages préparés, 🎨 Simulations et photos, 📄 Devis et factures, 🏠 Projet,
+  💶 Paiements, 🔗 Espace client, 🕓 Journal et historique, ⋯ Le reste), retenues d'un dossier à l'autre ; tout replié,
+  la fiche tient sur un écran de téléphone. L'ancien circuit de relances se tait quand la messagerie est en service :
+  détecteur RELANCES vide, ses tâches ouvertes « Pas à faire : relance confiée à la messagerie » (pas « Faite ») ;
+  « relances proposables » de l'écran Leads remplacé par « N messages à envoyer » ; carte de relance de la fiche
+  remplacée par la section Conversation. Tests : 1 829 → 1 837.

@@ -1,11 +1,11 @@
 "use client";
 
-import { ChevronRight, Phone, PhoneOff, Sparkles, X } from "lucide-react";
+import { ChevronRight, Sparkles, X } from "lucide-react";
 import { LIBELLES_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
 import { LIBELLES_MOTIF_ARCHIVAGE, MOTIFS_ARCHIVAGE, type MotifArchivage } from "@/lib/prospects/menage-constantes";
 import type { LigneLead } from "@/lib/prospects/leads";
 import { pluriel } from "@/lib/commun/format";
-import { noterDebutAppel } from "@/components/pilotage/NotesAppel";
+import { BoutonsContact } from "@/components/messagerie/BoutonsContact";
 import { TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
 import { PuceRappel } from "./DateRappel";
@@ -101,6 +101,8 @@ export function ChoixMotif({ onChoisir, onAnnuler, occupe }: { onChoisir: (motif
  * Mission 14 (partie 3) — dans « À rappeler » (`onRappel` fourni), le délai
  * laisse la place à la puce de la date de rappel, modifiable en un geste, et au
  * nombre de tentatives sans réponse.
+ * Mission 25 (lot 6) — nom, ville, la ligne Situation de « Où on en est », et les
+ * boutons ronds 📞 💬 ✉️ (appeler, ouvrir Messages sur le numéro, copier le mail).
  */
 export function Ligne({ lead, maintenant, selection, selectionne, onSelection, onOuvrir, onRappel, rappelEnCours = false }: { lead: LigneLead; maintenant: number; selection: boolean; selectionne: boolean; onSelection: () => void; onOuvrir: () => void; onRappel?: (iso: string | null) => void; rappelEnCours?: boolean }) {
   const archive = Boolean(lead.archiveLe);
@@ -125,12 +127,15 @@ export function Ligne({ lead, maintenant, selection, selectionne, onSelection, o
               {lead.smsNonLus > 0 ? <span className="shrink-0 rounded-full bg-action px-1.5 text-[10.5px] leading-[17px] font-semibold text-action-texte">{lead.smsNonLus} SMS</span> : null}
               {lead.doublon && !archive ? <span className="shrink-0 rounded-full border-[0.5px] border-attention/40 px-1.5 text-[10.5px] leading-[17px] text-attention-texte">Doublon ?</span> : null}
             </span>
-            <span className="block truncate text-[12.5px] text-texte-3">{[lead.ville, `${lead.libelleSource}${lead.campagne ? ` · ${lead.campagne}` : ""}`].filter(Boolean).join(" · ")}</span>
-            {rappel ? null : (
-              <span className="block truncate text-[12.5px] text-texte-3">
-                {archive ? `Archivé le ${new Date(lead.archiveLe!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}${lead.archiveMotif ? ` · ${lead.archiveMotif}` : ""}` : lead.attendDepuis || lead.rappelLe || lead.dernierAppel ? <Attente lead={lead} maintenant={maintenant} /> : `Arrivé ${heureArrivee(lead.recuLe)}`}
-              </span>
-            )}
+            <span className="block truncate text-[12.5px] text-texte-3">
+              {lead.ville ? `${lead.ville} · ` : ""}
+              {rappel || archive ? `${lead.libelleSource}${lead.campagne ? ` · ${lead.campagne}` : ""}` : lead.attendDepuis || lead.rappelLe || lead.dernierAppel ? <Attente lead={lead} maintenant={maintenant} /> : `Arrivé ${heureArrivee(lead.recuLe)}`}
+            </span>
+            {archive ? (
+              <span className="block truncate text-[12.5px] text-texte-3">{`Archivé le ${new Date(lead.archiveLe!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}${lead.archiveMotif ? ` · ${lead.archiveMotif}` : ""}`}</span>
+            ) : lead.situation ? (
+              <span className="block truncate text-[12.5px] text-texte-2">📍 {lead.situation}</span>
+            ) : null}
           </span>
         </button>
         {rappel && onRappel ? (
@@ -141,16 +146,19 @@ export function Ligne({ lead, maintenant, selection, selectionne, onSelection, o
           </div>
         ) : null}
       </div>
-      {archive ? null : lead.telephoneLien ? (
-        <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id, { nom: lead.nom, dossierId: lead.dossierId })} aria-label={`Appeler ${lead.nom}`} title={lead.telephone ?? undefined} className={cn("mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full", lead.aAppeler || lead.enRetard ? "bg-action text-action-texte hover:bg-action-clair" : "bg-surface-2 text-texte hover:bg-surface-2", TRANS)}>
-          <Phone size={18} aria-hidden />
-        </a>
-      ) : (
-        <span className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center text-texte-3" title="Pas de numéro">
-          <PhoneOff size={16} aria-hidden />
-        </span>
+      {archive ? null : (
+        <BoutonsContact
+          variante="ligne"
+          nom={lead.nom}
+          telephone={lead.telephoneLien ? lead.telephoneLien.replace(/^tel:/, "") : null}
+          email={lead.email}
+          leadId={lead.id}
+          dossierId={lead.dossierId}
+          appelPrioritaire={lead.aAppeler || lead.enRetard}
+          className="mr-1 shrink-0"
+        />
       )}
-      <ChevronRight size={16} aria-hidden className="mr-3 shrink-0 text-texte-3" />
+      <ChevronRight size={16} aria-hidden className="mr-3 hidden shrink-0 text-texte-3 sm:block" />
     </li>
   );
 }

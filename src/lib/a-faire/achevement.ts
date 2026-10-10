@@ -373,5 +373,13 @@ export async function issueDeLAbsence(tache: Tache, maintenant: Date): Promise<I
     if (fils?.reporteJusqua) return { statut: "PLUS_TARD", jusqua: fils.reporteJusqua, texte: `${PREFIXE_COCHE}mail reporté au ${jourMois(fils.reporteJusqua)}` };
   }
   const texte = await preuve(tache, maintenant);
+  // Mission 25 (lot 6) : une relance de l'ancien circuit, jamais faite, que la messagerie reprend : « Pas à faire »,
+  // pas « Faite » (la relance n'a pas eu lieu ; le message préparé l'attend dans la Messagerie).
+  if (!texte && RELANCES_CONFIEES.includes(tache.type)) {
+    const { messagerieEnService } = await import("@/lib/messagerie/suivis");
+    if (await messagerieEnService(maintenant)) return { statut: "PAS_A_FAIRE", raison: "AUTRE", texte: coche("relance confiée à la messagerie") };
+  }
   return { statut: "FAITE", texte: texte ? coche(texte) : TEXTE_PAR_DEFAUT };
 }
+
+const RELANCES_CONFIEES: readonly string[] = ["RELANCER_DEVIS", "RELANCER_PHOTOS", "RELANCER_AVIS", "REACTIVER"];

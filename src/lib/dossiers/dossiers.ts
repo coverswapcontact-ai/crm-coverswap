@@ -188,6 +188,7 @@ function versResume(
     dateChantier: dossier.dateChantier?.toISOString() ?? null,
     nbPhotos: dossier.photos === undefined ? undefined : lirePhotos(dossier.photos).length,
     clientTelephone: dossier.clientTelephone,
+    clientEmail: dossier.clientEmail ?? null,
     id: dossier.id,
     clientNom: dossier.clientNom,
     clientVille: dossier.clientVille,
@@ -318,9 +319,13 @@ async function resumesDe(dossiers: DossierAvecDernierDevis[]): Promise<DossierRe
   }
 
   const completude = dossiers.length > 0 ? await pointsACompleterDossiers(prisma, { id: { in: dossiers.map((dossier) => dossier.id) } }) : new Map<string, PointACompleter[]>();
-  return dossiers.map((dossier) =>
-    versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? []), completude.get(dossier.id) ?? [])
-  );
+  // Mission 25 (lot 6) : la ligne Situation de « Où on en est » (dossiers lus par la messagerie).
+  const { situationsDesDossiers } = await import("@/lib/messagerie/situations");
+  const situations = await situationsDesDossiers(dossiers.map((dossier) => dossier.id));
+  return dossiers.map((dossier) => ({
+    ...versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? []), completude.get(dossier.id) ?? []),
+    situation: situations.get(dossier.id) ?? null,
+  }));
 }
 
 /* ── Mission 13 (lot 6) : une page de dossiers, filtres côté serveur ─────── */

@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, CalendarClock, Camera, ChevronRight, Euro, FileText, MessageSquare } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarClock, Camera, Euro, FileText, MessageSquare } from "lucide-react";
+import { BoutonsContact } from "@/components/messagerie/BoutonsContact";
 import { LIBELLES_ETAPE, type EtapeDossier, type RubriqueDossier } from "@/lib/dossiers/constants";
 import { transitionsPossibles } from "@/lib/dossiers/regles";
 import { formatJourCourt, joursDeRetard } from "@/lib/dossiers/dates";
@@ -256,25 +257,29 @@ export function LigneDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
             : null;
   return (
     <li className="border-t-[0.5px] border-trait first:border-t-0">
-      <button type="button" onClick={() => onOuvrir()} className={cn("relative flex min-h-[56px] w-full items-center gap-3 py-2 pr-2 pl-4 text-left hover:bg-surface focus-visible:bg-surface focus-visible:outline-none", TRANS)}>
-        <Lisere couleur={couleurLisere(dossier, maintenant)} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14px] font-medium text-texte">
-            {dossier.clientNom}
-            {dossier.clientVille ? <span className="font-normal text-texte-3"> · {dossier.clientVille}</span> : null}
-          </span>
-          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12.5px] text-texte-3">
-            <span className="truncate">
-              {LIBELLES_ETAPE[dossier.etape]}
-              {montant !== null ? <span className="text-texte-2 tabular-nums"> · {formatMontant(montant)}</span> : null}
+      {/* Mission 25 (lot 6) : la ligne Situation de « Où on en est » et les boutons 📞 💬 ✉️, hors du bouton de la ligne. */}
+      <div className="flex items-center">
+        <button type="button" onClick={() => onOuvrir()} className={cn("relative flex min-h-[56px] min-w-0 flex-1 items-center gap-3 py-2 pr-2 pl-4 text-left hover:bg-surface focus-visible:bg-surface focus-visible:outline-none", TRANS)}>
+          <Lisere couleur={couleurLisere(dossier, maintenant)} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14px] font-medium text-texte">
+              {dossier.clientNom}
+              {dossier.clientVille ? <span className="font-normal text-texte-3"> · {dossier.clientVille}</span> : null}
             </span>
-            {signal ? <span className={cn("shrink-0 font-medium", signal.ton)}>· {signal.texte}</span> : null}
+            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12.5px] text-texte-3">
+              <span className="truncate">
+                {LIBELLES_ETAPE[dossier.etape]}
+                {montant !== null ? <span className="text-texte-2 tabular-nums"> · {formatMontant(montant)}</span> : null}
+              </span>
+              {signal ? <span className={cn("shrink-0 font-medium", signal.ton)}>· {signal.texte}</span> : null}
+            </span>
+            {dossier.situation ? <span className="mt-0.5 block truncate text-[12.5px] text-texte-2">📍 {dossier.situation}</span> : null}
+            {dossier.espace ? <LigneEspaceCourte espace={dossier.espace} maintenant={maintenant} className="mt-0.5" /> : null}
           </span>
-          {dossier.espace ? <LigneEspaceCourte espace={dossier.espace} maintenant={maintenant} className="mt-0.5" /> : null}
-        </span>
-        {echeance === "retard" ? <PastilleRetard /> : null}
-        <ChevronRight size={16} aria-hidden className="shrink-0 text-texte-3" />
-      </button>
+          {echeance === "retard" ? <PastilleRetard /> : null}
+        </button>
+        <BoutonsContact variante="ligne" nom={dossier.clientNom} telephone={dossier.clientTelephone} email={dossier.clientEmail} dossierId={dossier.id} className="mr-2 shrink-0" />
+      </div>
       <RaccourcisDossier dossier={dossier} onOuvrir={onOuvrir} />
     </li>
   );

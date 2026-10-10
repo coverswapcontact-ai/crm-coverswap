@@ -13,6 +13,7 @@ import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateur
 import { CelluleEspace } from "./EspaceColonne";
 import { comparerParEcheance } from "./VueKanban";
 import { PastilleEtape, TRANS } from "@/components/pilotage/ui";
+import { BoutonsContact } from "@/components/messagerie/BoutonsContact";
 
 export type CleTri = "prochaineAction" | "montant" | "anciennete";
 export type Tri = { cle: CleTri; sens: "asc" | "desc" };
@@ -97,7 +98,7 @@ export function VueListe({
 
       {/* Bureau : tableau triable */}
       <div className="hidden overflow-x-auto rounded-[11px] border-[0.5px] border-trait bg-surface md:block">
-        <table className="w-full min-w-[1240px] table-fixed text-left text-[13px]">
+        <table className="w-full min-w-[1400px] table-fixed text-left text-[13px]">
           <thead className="border-b-[0.5px] border-trait text-[12px] text-texte-3">
             <tr>
               <th scope="col" className="w-[132px] px-3 py-2.5 pl-4 font-medium">Main</th>
@@ -109,6 +110,7 @@ export function VueListe({
               <EnteteTriable cle="montant" tri={tri} onTrier={onTrier} className="w-[116px] text-right" />
               <EnteteTriable cle="prochaineAction" tri={tri} onTrier={onTrier} className="w-[250px]" />
               <EnteteTriable cle="anciennete" tri={tri} onTrier={onTrier} className="w-[112px]" />
+              <th scope="col" className="w-[156px] px-3 py-2.5 font-medium">Contact</th>
             </tr>
           </thead>
           <tbody>
@@ -137,6 +139,11 @@ export function VueListe({
                       <span className="min-w-0">
                         <span className="block truncate font-medium text-texte">{dossier.clientNom}</span>
                         <span className="block truncate text-[12px] text-texte-3">{dossier.clientVille}</span>
+                        {dossier.situation ? (
+                          <span className="block truncate text-[12px] text-texte-2" title={dossier.situation}>
+                            📍 {dossier.situation}
+                          </span>
+                        ) : null}
                       </span>
                     </button>
                   </td>
@@ -159,6 +166,10 @@ export function VueListe({
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-[12px] text-texte-3">
                     {formatDistanceStrict(new Date(dossier.ouvertLe), maintenant, { locale: fr })}
+                  </td>
+                  {/* Mission 25 (lot 6) : 📞 💬 ✉️ sans ouvrir le dossier. */}
+                  <td className="px-3 py-2" onClick={(evenement) => evenement.stopPropagation()}>
+                    <BoutonsContact variante="ligne" nom={dossier.clientNom} telephone={dossier.clientTelephone} email={dossier.clientEmail} dossierId={dossier.id} />
                   </td>
                 </tr>
               );

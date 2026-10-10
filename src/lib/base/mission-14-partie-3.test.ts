@@ -98,7 +98,8 @@ describe("les deux listes de Leads", () => {
     assert.ok(ids(await leads.listerLeads({ vue: "ARCHIVES" }, MAINTENANT)).includes(archive.id));
 
     // Les compteurs : les deux listes, les retards seuls, et ce qui tombe plus tard aujourd'hui (heure de Paris).
-    assert.deepEqual(aAppeler.compteurs, { aAppeler: 2, aRappeler: 5, enRetard: 1, aujourdhui: 1, sansSuite: 1, archives: 1, actifs: 7 });
+    // Mission 25 (lot 6) : « anciens » compte les « À appeler » reçus avant le 25/09/2026 (bouton « Archiver les anciens leads »).
+    assert.deepEqual(aAppeler.compteurs, { aAppeler: 2, aRappeler: 5, enRetard: 1, aujourdhui: 1, sansSuite: 1, archives: 1, actifs: 7, anciens: 2 });
     assert.equal(await leads.compterLeadsEnRetard(MAINTENANT), 1, "l'onglet Leads ne compte que les retards");
   });
 

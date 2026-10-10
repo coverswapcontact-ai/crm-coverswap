@@ -63,6 +63,9 @@ export type DossierResume = {
   dateChantier?: string | null;
   nbPhotos?: number;
   clientTelephone?: string;
+  /** Mission 25 (lot 6) : le mail (bouton ✉️ de la ligne) et la ligne Situation de « Où on en est ». */
+  clientEmail?: string | null;
+  situation?: string | null;
 };
 
 export type PhotoVue = { id: string; url: string; /** Mission 13 (lot 6) : la vignette 320 px, pour les listes. */ vignette: string; type: string; /** Après chantier (portfolio). */ apres: boolean };

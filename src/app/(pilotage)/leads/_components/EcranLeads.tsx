@@ -223,6 +223,43 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
     });
   }
 
+  /**
+   * Mission 25 (lot 6) — « Archiver les anciens leads » : le nombre exact d'abord (dans le bouton et la confirmation),
+   * puis l'archivage d'un geste, motif « Ancien lead, avant la campagne du 25/09 », et « Annuler » quelques secondes.
+   */
+  const [archivageAnciens, setArchivageAnciens] = useState(false);
+  async function archiverAnciens() {
+    const nombre = donnees.compteurs.anciens ?? 0;
+    if (!nombre) return;
+    if (!window.confirm(`Archiver ${pluriel(nombre, "lead reçu", "leads reçus")} avant le 25/09/2026 et jamais appelé${nombre > 1 ? "s" : ""} ?
+
+Motif : « Ancien lead, avant la campagne du 25/09 ». C'est réversible : ils restent dans « Archivés », disponibles pour une campagne de réactivation.`)) return;
+    setArchivageAnciens(true);
+    try {
+      const { ids } = await envoyerJson<{ ids: string[] }>("/api/leads/anciens", "POST");
+      await rafraichir();
+      toast.success(`${pluriel(ids.length, "ancien lead archivé", "anciens leads archivés")}`, {
+        duration: 10_000,
+        action: {
+          label: "Annuler",
+          onClick: () => {
+            // 200 leads au plus par action : la restauration se fait par paquets.
+            const paquets = Array.from({ length: Math.ceil(ids.length / 200) }, (_, i) => ids.slice(i * 200, i * 200 + 200));
+            void paquets
+              .reduce((suite, paquet) => suite.then(() => executer("RESTAURER", paquet).then(() => undefined)), Promise.resolve())
+              .then(() => rafraichir())
+              .then(() => toast.success("Annulé : les anciens leads sont revenus dans « À appeler »"))
+              .catch((erreur) => toast.error("Annulation impossible", { description: messageErreur(erreur) }));
+          },
+        },
+      });
+    } catch (erreur) {
+      toast.error("Archivage impossible", { description: messageErreur(erreur) });
+    } finally {
+      setArchivageAnciens(false);
+    }
+  }
+
   async function ouvrirDossier(lead: LigneLead, options: { rester?: boolean } = {}): Promise<string | null> {
     setOuverture(lead.id);
     try {
@@ -311,8 +348,20 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
         </label>
       </div>
 
-      {/* Mission 14 (partie 7) : les nombres du jour — rappels (→ « À rappeler ») et relances proposables (→ la feuille). */}
+      {/* Mission 14 (partie 7) : les nombres du jour — rappels (→ « À rappeler ») et relances (mission 25 : celles de la messagerie). */}
       {modeAppels ? null : <LigneDuJour aujourdhui={donnees.compteurs.aujourdhui ?? 0} enRetard={donnees.compteurs.enRetard ?? 0} onRappels={() => setVue("A_RAPPELER")} />}
+
+      {/* Mission 25 (lot 6) : les leads d'avant la campagne du 25/09, encore « À appeler » : le nombre, puis le bouton. */}
+      {!modeAppels && vue === "A_APPELER" && (donnees.compteurs.anciens ?? 0) > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[12px] border-[0.5px] border-trait bg-surface px-3.5 py-2.5">
+          <p className="min-w-0 flex-1 text-[13px] text-texte-2">
+            {pluriel(donnees.compteurs.anciens ?? 0, "lead reçu", "leads reçus")} avant le 25/09 dans « À appeler ».
+          </p>
+          <Bouton icone={<Archive size={15} aria-hidden />} chargement={archivageAnciens} onClick={() => void archiverAnciens()}>
+            Archiver les anciens leads ({donnees.compteurs.anciens})
+          </Bouton>
+        </div>
+      ) : null}
 
       {/* Mission 13 (B19) : ce qui s'est passé sur le site cette semaine, à côté des leads qui en viennent. */}
       {modeAppels ? null : <SurLeSite resume={siteInitial} travaux={travauxInitial} onOuvrirLead={(id) => setOuvert(id)} />}

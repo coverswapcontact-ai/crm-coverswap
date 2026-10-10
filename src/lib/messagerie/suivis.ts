@@ -34,6 +34,15 @@ export async function lancementMessagerie(maintenant: Date = new Date()): Promis
   return maintenant;
 }
 
+/**
+ * Mission 25 (lot 6) — la messagerie est en service (sa mise en service est posée, sans rien écrire ici) : c'est elle
+ * qui prépare les relances. L'ancien circuit (tâches RELANCER_*, REACTIVER, « relances proposables ») se tait.
+ */
+export async function messagerieEnService(maintenant: Date = new Date()): Promise<boolean> {
+  const lu = await lireParametre("MESSAGERIE_LANCEMENT", maintenant);
+  return typeof lu === "string" && !Number.isNaN(Date.parse(lu)) && Date.parse(lu) <= maintenant.getTime();
+}
+
 /** Oublie la date de lancement gardée en mémoire (essais). */
 export function oublierLancement(): void {
   memoire[CLE_LANCEMENT] = undefined;

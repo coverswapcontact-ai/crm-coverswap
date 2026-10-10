@@ -280,40 +280,39 @@ const CLASSE_MORCEAU = "inline-flex h-11 items-center rounded-[8px] px-1.5 hover
  * faite à l'ouverture de l'écran (pas une requête de plus).
  */
 export function LigneDuJour({ aujourdhui, enRetard, onRappels }: { aujourdhui: number; enRetard: number; onRappels: () => void }) {
-  const { donnees, recharger } = useRelances(null);
-  const [ouverte, setOuverte] = useState(false);
-  const total = donnees?.total ?? 0;
+  // Mission 25 (lot 6) : les relances sont préparées par la messagerie ; la ligne compte ses messages à envoyer
+  // (A_ENVOYER et A_VALIDER) et ouvre le mode « Un par un ». L'ancienne feuille des relances proposables n'est plus ouverte d'ici.
+  const [aFaire, setAFaire] = useState<number | null>(null);
+  useEffect(() => {
+    let actif = true;
+    appelApi<{ aEnvoyer: number; aValider: number }>("/api/messagerie/etat")
+      .then((etat) => {
+        if (actif) setAFaire(etat.aEnvoyer + etat.aValider);
+      })
+      .catch(() => undefined);
+    return () => {
+      actif = false;
+    };
+  }, [aujourdhui, enRetard]);
   return (
-    <>
-      <p className="mt-3 flex flex-wrap items-center gap-x-0.5 text-[13.5px] text-texte-3">
-        <BellRing size={15} aria-hidden className="mr-1 shrink-0" />
-        <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, TRANS)}>
-          {pluriel(aujourdhui, "rappel")} aujourd&apos;hui
-        </button>
-        <span aria-hidden>·</span>
-        <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, enRetard > 0 && "font-medium text-retard-texte", TRANS)}>
-          {enRetard} en retard
-        </button>
-        {donnees ? (
-          <>
-            <span aria-hidden>·</span>
-            <button type="button" onClick={() => setOuverte(true)} className={cn(CLASSE_MORCEAU, total > 0 && "text-attention-texte", TRANS)}>
-              {pluriel(total, "relance proposable", "relances proposables")}
-            </button>
-          </>
-        ) : null}
-      </p>
-      {ouverte ? (
-        <FeuilleRelances
-          donnees={donnees}
-          onRecharger={recharger}
-          onFermer={() => {
-            setOuverte(false);
-            recharger();
-          }}
-        />
+    <p className="mt-3 flex flex-wrap items-center gap-x-0.5 text-[13.5px] text-texte-3">
+      <BellRing size={15} aria-hidden className="mr-1 shrink-0" />
+      <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, TRANS)}>
+        {`${pluriel(aujourdhui, "rappel")} aujourd'hui`}
+      </button>
+      <span aria-hidden>·</span>
+      <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, enRetard > 0 && "font-medium text-retard-texte", TRANS)}>
+        {enRetard} en retard
+      </button>
+      {aFaire !== null ? (
+        <>
+          <span aria-hidden>·</span>
+          <a href="/messagerie?vue=un-par-un" className={cn(CLASSE_MORCEAU, aFaire > 0 && "text-attention-texte", TRANS)}>
+            {pluriel(aFaire, "message à envoyer", "messages à envoyer")}
+          </a>
+        </>
       ) : null}
-    </>
+    </p>
   );
 }
 

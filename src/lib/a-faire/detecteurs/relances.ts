@@ -31,6 +31,10 @@ import { cleTache, type Detecteur } from "./types";
 export const detecteurRelances: Detecteur = {
   source: "RELANCES",
   async detecter({ maintenant }) {
+    // Mission 25 (lot 6) : la messagerie en service prépare les relances (D2–D5, P2–P3, C4–C5, R1–R2) ; ce circuit se
+    // tait, et ses tâches encore ouvertes passent « Pas à faire : relance confiée à la messagerie » (achevement.ts).
+    const { messagerieEnService } = await import("@/lib/messagerie/suivis");
+    if (await messagerieEnService(maintenant)) return [];
     const { devis, photos, avis, reactivations } = await relancesProposables(maintenant, { smsPhotos: false, smsDevis: false, smsAvis: false, smsReactivations: false });
     const detections: Detection[] = [];
     for (const d of devis) {

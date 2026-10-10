@@ -26,23 +26,30 @@ const extrait = (texte: string, n: number) => {
 };
 const libelleCode = (code: string) => (estCodeMessage(code) ? `${code} (${definitionMessage(code as CodeMessage).libelle.toLowerCase()})` : code === "REPONSE" ? "la réponse proposée" : "ton message");
 
+export type LeadPourSituation = { creeLe: Date; source: string; statut: string; dernierAppelLe: Date | null; rappelLe: Date | null; perteLe: Date | null; motifPerte: string | null };
+
+/**
+ * 📍 La situation d'un lead sans dossier — une seule règle pour « Où on en est » et pour la ligne Situation des listes
+ * (lot 6), qui l'utilisent aussi pour un lead que la messagerie n'a pas encore lu (avant le 25/09).
+ */
+export function situationDuLead(lead: LeadPourSituation, contexte: { envois: number; tentativesSansReponse: number }, maintenant: Date): string {
+  if (lead.statut === "PERDU") return `Sans suite depuis le ${jourCourt(lead.perteLe ?? lead.creeLe)}${lead.motifPerte ? ` (${MOTIFS[lead.motifPerte] ?? "autre motif"})` : ""}.`;
+  const source = lead.source === "META_ADS" ? " (Meta)" : lead.source.startsWith("SITE") ? " (site)" : "";
+  const sansReponse = contexte.tentativesSansReponse;
+  if (!lead.dernierAppelLe && !contexte.envois) return `Lead du ${jourCourt(lead.creeLe)}${source}, pas encore appelé.`;
+  if (lead.rappelLe && lead.rappelLe.getTime() > maintenant.getTime()) return `Lead du ${jourCourt(lead.creeLe)}${source}, à rappeler ${dateAbsolue(lead.rappelLe)}.`;
+  if (sansReponse > 0) return `Lead du ${jourCourt(lead.creeLe)}${source}, ${sansReponse} appel${sansReponse > 1 ? "s" : ""} sans réponse${lead.dernierAppelLe ? ` (dernier le ${jourCourt(lead.dernierAppelLe)})` : ""}.`;
+  if (lead.dernierAppelLe) return `Lead du ${jourCourt(lead.creeLe)}${source}, joint le ${jourCourt(lead.dernierAppelLe)}.`;
+  return `Lead du ${jourCourt(lead.creeLe)}${source}, message envoyé, pas encore appelé.`;
+}
+
 /** 📍 Situation : où en est le dossier, depuis quand, ce que le client a fait. */
 export function ligneSituation(etat: EtatSuivi, maintenant: Date): string {
   const dossier = etat.dossier;
   let phrase: string;
   if (!dossier) {
     const lead = etat.lead;
-    if (!lead) phrase = "Contact sans dossier.";
-    else if (lead.statut === "PERDU") phrase = `Sans suite depuis le ${jourCourt(lead.perteLe ?? lead.creeLe)}${lead.motifPerte ? ` (${MOTIFS[lead.motifPerte] ?? "autre motif"})` : ""}.`;
-    else {
-      const source = lead.source === "META_ADS" ? " (Meta)" : lead.source.startsWith("SITE") ? " (site)" : "";
-      const sansReponse = etat.tentativesSansReponse;
-      if (!lead.dernierAppelLe && !etat.envois.length) phrase = `Lead du ${jourCourt(lead.creeLe)}${source}, pas encore appelé.`;
-      else if (lead.rappelLe && lead.rappelLe.getTime() > maintenant.getTime()) phrase = `Lead du ${jourCourt(lead.creeLe)}${source}, à rappeler ${dateAbsolue(lead.rappelLe)}.`;
-      else if (sansReponse > 0) phrase = `Lead du ${jourCourt(lead.creeLe)}${source}, ${sansReponse} appel${sansReponse > 1 ? "s" : ""} sans réponse${lead.dernierAppelLe ? ` (dernier le ${jourCourt(lead.dernierAppelLe)})` : ""}.`;
-      else if (lead.dernierAppelLe) phrase = `Lead du ${jourCourt(lead.creeLe)}${source}, joint le ${jourCourt(lead.dernierAppelLe)}.`;
-      else phrase = `Lead du ${jourCourt(lead.creeLe)}${source}, message envoyé, pas encore appelé.`;
-    }
+    phrase = lead ? situationDuLead(lead, { envois: etat.envois.length, tentativesSansReponse: etat.tentativesSansReponse }, maintenant) : "Contact sans dossier.";
   } else {
     const devis = [...etat.devis].sort((a, b) => b.enLigneLe.getTime() - a.enLigneLe.getTime())[0];
     const sims = etat.simulations.filter((s) => s.source !== "SITE").sort((a, b) => b.publieeLe.getTime() - a.publieeLe.getTime());

@@ -108,4 +108,17 @@ groupe IA : `IA_MESSAGERIE` (interrupteur), `IA_MESSAGERIE_BUDGET` (10 € sans 
 - **Contrôleur** : les mots se reconnaissent accents compris (« prête » n'est plus pris pour « te ») ; relevé en
   remplissant les 41 messages pour cinq profils de clients.
 - **Accord de la pièce** : « nouvel intérieur » devant une voyelle, « nouveau local », « nouvelle cuisine ».
+- **Anciens leads (lot 6)** : seulement ceux encore « À appeler » (jamais appelés, jamais contactés, sans rappel)
+  reçus avant le 25/09/2026 minuit (Paris) ; un lead déjà appelé (« À rappeler ») ou sans suite ne bouge pas. Le
+  bouton montre le nombre exact, la confirmation le répète ; « Annuler » restaure (par paquets de 200).
+- **Fiche dossier** : seule « Prochaine action » est ouverte par défaut ; les sections que Lucas ouvre ou ferme sont
+  retenues sur l'appareil (stockage local), d'un dossier à l'autre ; un raccourci (« Répondre », « Encaisser »…) ouvre
+  sa section sans la retenir. Le reste du dossier d'avant (délais, dépenses, étapes et notes, chronologie, archivage)
+  garde une dernière section : rien n'a disparu.
+- **Ancien circuit de relances** : dès la mise en service de la messagerie, le détecteur RELANCES ne propose plus rien
+  et ses tâches ouvertes passent « Pas à faire » avec la raison « relance confiée à la messagerie » (une relance jamais
+  faite n'est pas « Faite ») ; une relance déjà faite garde sa preuve. La feuille « relances proposables » n'est plus
+  ouverte depuis Leads : la ligne du jour compte les messages de la messagerie et ouvre « Un par un ».
+- **Espace perdu dans le JSX** : un texte qui suit une expression et contient une entité (`&apos;`) perd son espace de
+  tête à la compilation (« 0 rappelaujourd'hui ») : écrire ces phrases en chaîne JavaScript (`{`…`}`).
 

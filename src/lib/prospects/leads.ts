@@ -97,6 +97,8 @@ export type LigneLead = {
   doublon: { de: string; nom: string; motif: string; dossierId: string | null } | null;
   /** Notes prises pendant les appels, de la plus récente à la plus ancienne. */
   notesAppel: NoteAppelVue[];
+  /** Mission 25 (lot 6) : la ligne Situation de « Où on en est » (celle du suivi, sinon la règle), sous le nom. */
+  situation?: string | null;
 };
 
 export type SimulationLead = { id: string; le: string; reference: string | null; prix: number | null; avant: string | null; apres: string | null };
@@ -113,6 +115,8 @@ export type CompteursLeads = {
   archives: number;
   /** Les deux listes ensemble (à appeler + à rappeler). */
   actifs: number;
+  /** Mission 25 (lot 6) : dans « À appeler », les leads reçus avant la campagne du 25/09/2026 (bouton « Archiver les anciens leads »). */
+  anciens?: number;
 };
 export type ListeLeads = { lignes: LigneLead[]; compteurs: CompteursLeads; sources: string[]; /** Mission 13 (lot 6) : la page demandée et le total du filtre (absents des réponses d'avant, en cache). */ total?: number; page?: number; parPage?: number };
 
@@ -166,6 +170,10 @@ const whereActif = (maintenant: Date): Prisma.LeadWhereInput => ({ OR: [LEAD_SAN
 const JAMAIS_APPELE: Prisma.LeadWhereInput = { dernierAppelLe: null, dernierContactLe: null, rappelLe: null };
 /** « À rappeler » : déjà appelé, contacté par écrit (sans date : après les rappels datés), ou un rappel daté. */
 const DEJA_APPELE: Prisma.LeadWhereInput = { OR: [{ dernierAppelLe: { not: null } }, { dernierContactLe: { not: null } }, { rappelLe: { not: null } }] };
+
+/** Mission 25 (lot 6) : « À appeler », reçus avant la campagne Meta du 25/09/2026 (minuit à Paris). */
+export const DEBUT_CAMPAGNE_LEADS = new Date("2026-09-24T22:00:00.000Z");
+export const whereAnciensLeads = (maintenant: Date): Prisma.LeadWhereInput => ({ AND: [whereVue("A_APPELER", maintenant), { createdAt: { lt: DEBUT_CAMPAGNE_LEADS } }] });
 
 function whereVue(vue: VueLeads, maintenant: Date): Prisma.LeadWhereInput {
   switch (vue) {
@@ -359,7 +367,7 @@ export async function listerLeads(filtres: { vue?: VueLeads; source?: string; re
   // Mission 13 (lot 6) : une page à la fois quand l'écran la demande ; `limite` reste pour l'assistant et l'audit.
   const page = filtres.page ? tranche(filtres.page, filtres.parPage) : null;
   const where: Prisma.LeadWhereInput = { AND: [...communs, whereVue(vue, maintenant)] };
-  const [leads, aAppeler, aRappeler, enRetard, aujourdhui, sansSuite, archives, sources, total] = await Promise.all([
+  const [leads, aAppeler, aRappeler, enRetard, aujourdhui, sansSuite, archives, sources, total, anciens] = await Promise.all([
     prisma.lead.findMany({ where, include: inclusion, orderBy: ORDRE[vue], ...(page ? { skip: page.skip, take: page.take } : { take: Math.min(filtres.limite ?? 300, 500) }) }),
     prisma.lead.count({ where: whereVue("A_APPELER", maintenant) }),
     prisma.lead.count({ where: whereVue("A_RAPPELER", maintenant) }),
@@ -369,10 +377,11 @@ export async function listerLeads(filtres: { vue?: VueLeads; source?: string; re
     prisma.lead.count({ where: whereVue("ARCHIVES", maintenant) }),
     prisma.lead.groupBy({ by: ["source"], where: whereActif(maintenant), _count: { _all: true } }),
     prisma.lead.count({ where }),
+    prisma.lead.count({ where: whereAnciensLeads(maintenant) }),
   ]);
   return {
-    lignes: await avecDoublons(leads.map((lead) => versLigne(lead, maintenant))),
-    compteurs: { aAppeler, aRappeler, enRetard, aujourdhui, sansSuite, archives, actifs: aAppeler + aRappeler },
+    lignes: await avecSituations(await avecDoublons(leads.map((lead) => versLigne(lead, maintenant))), maintenant),
+    compteurs: { aAppeler, aRappeler, enRetard, aujourdhui, sansSuite, archives, actifs: aAppeler + aRappeler, anciens },
     sources: sources.sort((a, b) => b._count._all - a._count._all).map((s) => s.source),
     total,
     page: page?.page ?? 1,
@@ -444,7 +453,14 @@ export async function rappelsDesLeads(maintenant: Date = new Date(), avant?: Dat
 /** Une seule ligne, rafraîchie après un appel (le mode « enchaîner » n'a pas à recharger toute la liste). */
 export async function chargerLigneLead(id: string, maintenant: Date = new Date()): Promise<LigneLead | null> {
   const lead = await prisma.lead.findFirst({ where: { id }, include: inclusion });
-  return lead ? (await avecDoublons([versLigne(lead, maintenant)]))[0] : null;
+  return lead ? (await avecSituations(await avecDoublons([versLigne(lead, maintenant)]), maintenant))[0] : null;
+}
+
+/** Mission 25 (lot 6) : la ligne Situation de chaque lead (messagerie/situations.ts). */
+async function avecSituations(lignes: LigneLead[], maintenant: Date): Promise<LigneLead[]> {
+  const { situationsDesLeads } = await import("@/lib/messagerie/situations");
+  const situations = await situationsDesLeads(lignes, maintenant);
+  return lignes.map((l) => ({ ...l, situation: situations.get(l.id) ?? null }));
 }
 
 /** Le contact que chaque doublon probable semble doubler : son nom et son dossier en cours, pour fusionner en connaissance de cause. */

@@ -398,9 +398,12 @@ export async function proposerRelances(maintenant: Date = new Date()): Promise<R
 export function enregistrerTachesRelances(): void {
   enregistrerTravailPeriodique({
     nom: "propositions-relances",
-    libelle: "Propositions de relance des devis sans réponse",
+    libelle: "Propositions de relance des devis sans réponse (remplacé par la messagerie, mission 25)",
     acteur: "SYSTEME:relances",
     intervalleMs: 6 * 60 * 60_000,
+    // Mission 25 : les relances de devis (D2 à D5) sont préparées par le moteur de la messagerie, à l'heure prévue,
+    // après la garde de silence ; ce circuit de mails proposés toutes les 6 h ne tourne plus (pas de doublon).
+    estActif: () => false,
     executer: async () => {
       const resume = await proposerRelances();
       if (resume.parametreManquant) console.info("[relances] délai de relance non renseigné : aucune proposition");

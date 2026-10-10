@@ -31,7 +31,22 @@ export function estHeureOuvree(date: Date = new Date()): boolean {
 
 export type ResultatAccuse = { envoye: boolean; raison: string; smsId?: string };
 
+/**
+ * Mission 25 : l'accusé par le fournisseur est remplacé par A1, le premier message de la messagerie (cahier « Relances
+ * et messagerie », § Plan de construction : « les anciens circuits […] accusé par fournisseur sont remplacés par le
+ * moteur, pas dupliqués »). Le nouveau lead déclenche le balayage de la messagerie : A1 est prêt quelques secondes plus
+ * tard, avec l'alerte sur le téléphone ; en mode Manuel, c'est Lucas qui l'envoie. Rien ne part plus d'ici.
+ */
 export async function envoyerAccuseDeReception(leadId: string, maintenant: Date = new Date()): Promise<ResultatAccuse> {
+  void leadId;
+  void maintenant;
+  const { signalerMessagerie } = await import("@/lib/messagerie/taches");
+  await signalerMessagerie();
+  return { envoye: false, raison: "remplacé par A1 (messagerie)" };
+}
+
+/** L'ancien accusé par le fournisseur (avant la mission 25), gardé pour le lot 8 (passerelle Android) et l'historique. */
+export async function envoyerAccuseParFournisseur(leadId: string, maintenant: Date = new Date()): Promise<ResultatAccuse> {
   try {
     if (!fournisseurSms()) return { envoye: false, raison: "aucun fournisseur de SMS configuré" };
     const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { id: true, prenom: true, telephone: true, archiveLe: true, clientId: true } });

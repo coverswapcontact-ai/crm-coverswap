@@ -1430,6 +1430,7 @@ model ModeleSms {
   actif        Boolean   @default(true)
   automatique  Boolean   @default(false) // part seul (accusé de réception uniquement)
   ordre        Int       @default(0)
+  mode         String? // Mission 25 : AUTO | VALIDATION | DESACTIVE en mode Android (null = celui de la liste validée)
   archiveLe    DateTime?
   archiveMotif String?
   ecriture     String?
@@ -2356,4 +2357,104 @@ model FichierDepose {
 
   @@index([cibleEntite, cibleId])
   @@index([jetonId])
+}
+
+// ─────────────────────────────────────────────
+// Mission 25 (10/10/2026) : la messagerie et les relances préparées (src/lib/messagerie, docs/MESSAGERIE.md).
+// Un suivi par dossier, ou par lead tant qu'il n'a pas de dossier : les faits, « Où on en est », le journal et
+// la file des messages préparés. Rien ne part seul en mode Manuel : Lucas envoie depuis son téléphone et confirme.
+// ─────────────────────────────────────────────
+
+model Suivi {
+  id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  leadId            String?   @unique // lead d'origine (gardé quand le dossier arrive)
+  dossierId         String?   @unique // dossier suivi ; null tant que le lead n'en a pas
+  clientId          String?
+  nom               String // nom affiché dans la messagerie (recopié, la liste n'attend pas une jointure)
+  telephone         String? // +33… tel que normalisé ; null sans numéro
+  faits             String    @default("{}") // JSON Faits (types.ts) : ce que le dossier, les notes et les messages ont appris
+  ouEnEst           String    @default("{}") // JSON { situation, client, suite, le, par } : les trois lignes, recalculées à chaque événement
+  ouEnEstManuel     String? // JSON { situation?, client?, suite?, le } : correction de Lucas, gardée jusqu'au prochain fait nouveau
+  prochaineAction   String? // la suite en une phrase (ligne 3 sans « Toi : »)
+  prochaineActionLe DateTime?
+  etat              String    @default("{}") // JSON : instantané lu à la dernière analyse (différences d'une analyse à l'autre)
+  curseur           String? // JSON { le, id } : dernier élément de l'historique transformé en ligne de journal
+  analyseLe         DateTime?
+  revoirLe          DateTime? // prochaine fois où le moteur doit relire ce suivi (relance à venir, fin de pause, rappel)
+  pauseJusquau      DateTime? // « Pause relances » ou rappel daté : rien d'autre ne part avant
+  pauseMotif        String?
+  validationForcee  Boolean   @default(false) // note sensible : ses messages passent en Validation (mode Android)
+  stopLe            DateTime? // « Ne plus écrire » ou STOP rapporté : plus aucun SMS, définitivement
+  demarrageDoux     Boolean   @default(false) // ouvert avant le lancement : propositions seulement pendant 14 jours
+  luLe              DateTime? // dernière lecture de la conversation par Lucas
+  nonLu             Boolean   @default(false) // marqué non lu à la main (glisser vers la droite)
+  dernierEchangeLe  DateTime? // dernier message de la conversation, dans un sens ou dans l'autre
+  dernierExtrait    String?
+  dernierSens       String? // CLIENT | TOI
+  archiveLe         DateTime? // conversation archivée (glisser vers la gauche) : le dossier, lui, ne bouge pas
+  archiveMotif      String?
+  ecriture          String?
+
+  @@index([dernierEchangeLe])
+  @@index([clientId])
+  @@index([revoirLe])
+}
+
+// Une ligne datée du journal d'un suivi, une par événement, écrite sans IA (sauf les décisions de l'IA) ; la clé
+// rend chaque ligne unique : rejouer un événement n'en écrit pas une seconde.
+model LigneJournalSuivi {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  suiviId      String
+  le           DateTime // quand c'est arrivé
+  acteur       String // CLIENT | TOI | IA | CRM
+  texte        String
+  cle          String    @unique
+  archiveLe    DateTime?
+  archiveMotif String?
+  ecriture     String?
+
+  @@index([suiviId, le])
+}
+
+// Un message préparé : une intention du moteur (code de la liste validée) ou une réponse proposée, avec son texte, son
+// heure, son canal et ce qu'il est devenu. La clé (A1:lead:…, D1:<devis>…) empêche de préparer deux fois la même chose.
+model MessagePrepare {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  suiviId        String
+  code           String // A1…R2, E1…E3, CC, Q1…Q8, REPONSE, LIBRE
+  cle            String    @unique
+  canal          String // SMS | MAIL | ESPACE
+  destinataire   String? // +33… ou adresse e-mail
+  texte          String // texte proposé (personnalisé et contrôlé)
+  texteValide    String // texte de la liste validée, rempli : il part à la place si le contrôleur refuse
+  texteEnvoye    String? // ce qui est vraiment parti (« Modifié »)
+  variante       String?
+  prevuLe        DateTime // heure prévue (horaires appliqués)
+  statut         String // PREVU | A_ENVOYER | A_VALIDER | ENVOYE | NON_ENVOYE | RETENU | ANNULE
+  mode           String    @default("VALIDATION") // AUTO | VALIDATION | DESACTIVE : utile en mode Android seulement
+  reponse        Boolean   @default(false) // répond à un geste du client : passe la garde de silence
+  douceur        Boolean   @default(false) // démarrage en douceur : une proposition, sans alerte
+  raison         String? // pourquoi il est préparé
+  motif          String? // pourquoi il est retenu, annulé ou non envoyé
+  ia             Boolean   @default(false) // texte personnalisé ou rédigé par l'IA
+  ecartControle  String? // règle cassée par le texte de l'IA (le texte validé a été gardé)
+  simulationId   String? // image à joindre (client « SMS d'abord »)
+  sourceId       String? // élément qui l'a fait naître (message du client, devis, appel…)
+  ouvertLe       DateTime? // « Ouvrir Messages » touché
+  notifieLe      DateTime? // alerte « message prêt » partie
+  envoyeLe       DateTime? // confirmé « Envoyé »
+  nonConfirmeLe  DateTime? // 19 h 30 passées sans confirmation : revient en tête le lendemain
+  reports        Int       @default(0)
+  decidePar      String? // acteur du dernier geste
+  archiveLe      DateTime?
+  archiveMotif   String?
+  ecriture       String?
+
+  @@index([suiviId, statut])
+  @@index([statut, prevuLe])
 }

@@ -124,6 +124,13 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   // Mission 17 (partie A) : les tâches de Lucas qui le nomment (titre, raison, raccourci avec son numéro).
   const tachesAFaire = await client.tacheAFaire.findMany({ where: { ...AVEC_ARCHIVES, ...parContact } });
 
+  // Mission 25 : la messagerie — le suivi (faits, « Où on en est »), son journal et ses messages préparés.
+  const suivis = await client.suivi.findMany({ where: { ...AVEC_ARCHIVES, OR: [{ clientId: { in: clientIds } }, { leadId: { in: leadIds } }, { dossierId: { in: dossierIds } }] } });
+  const suiviIds = suivis.map((s) => s.id);
+  const [lignesJournalSuivi, messagesPrepares] = suiviIds.length
+    ? await Promise.all([client.ligneJournalSuivi.findMany({ where: { ...AVEC_ARCHIVES, suiviId: { in: suiviIds } } }), client.messagePrepare.findMany({ where: { ...AVEC_ARCHIVES, suiviId: { in: suiviIds } } })])
+    : [[], []];
+
   // Mission 10 (partie restée hors du périmètre jusqu'ici) et mission 17 (partie C) : traces des modifications de
   // l'assistant et messages de l'espace, par dossier ; fichiers reçus et liens de dépôt, par cible.
   const [modificationsDossier, messagesEspace] = await Promise.all([
@@ -222,6 +229,9 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       TacheAFaire: tachesAFaire,
       ModificationDossier: modificationsDossier,
       MessageEspace: messagesEspace,
+      Suivi: suivis,
+      LigneJournalSuivi: lignesJournalSuivi,
+      MessagePrepare: messagesPrepares,
       ModificationAssistant: modificationsAssistant,
       FichierDepose: fichiersDeposes,
       JetonDepot: jetonsDepot,
@@ -357,6 +367,9 @@ export async function anonymiserDansTransaction(
       if (modele === "Lead" && ligne.rappelLe) data.rappelLe = null;
       // Rien ne part plus vers une personne anonymisée : envoi en attente annulé, séquence arrêtée.
       if (modele === "EnvoiMail" && ligne.statut === "A_ENVOYER") Object.assign(data, { statut: "ANNULE", erreur: "Client anonymisé (RGPD)" });
+      // Mission 25 : plus aucun message préparé vers une personne anonymisée, et plus de SMS.
+      if (modele === "MessagePrepare" && ["PREVU", "A_ENVOYER", "A_VALIDER"].includes(String(ligne.statut))) Object.assign(data, { statut: "ANNULE" });
+      if (modele === "Suivi") Object.assign(data, { stopLe: ligne.stopLe ?? maintenant, pauseJusquau: null, revoirLe: null });
       if (modele === "InscriptionSequence" && (ligne.statut === "EN_COURS" || ligne.statut === "EN_VALIDATION")) Object.assign(data, { statut: "ARRETEE", arretMotif: "Client anonymisé (RGPD)", prochainEnvoiLe: null });
       if (modele === "Fichier") Object.assign(data, { archiveLe: ligne.archiveLe ?? maintenant, archiveMotif: "Effacé (RGPD)" });
       if (modele === "Proposition" && ligne.statut === "EN_ATTENTE") {

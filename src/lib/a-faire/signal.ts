@@ -20,6 +20,8 @@ export const TYPE_TACHE_EFFET = "A_FAIRE_EFFET";
 export async function signalerChangementTaches(): Promise<void> {
   try {
     await mettreEnFile({ type: TYPE_TACHE_DETECTION, cle: CLE_TACHE_DETECTION, mode: "RECONCILIATION", apres: new Date(Date.now() + DELAI_DETECTION_MS), tentativesMax: 3 });
+    // Mission 25 : le même geste fait relire les dossiers touchés par la messagerie (balayage dans 4 s, une seule tâche).
+    await mettreEnFile({ type: "MESSAGERIE_SCAN", cle: "messagerie:scan", mode: "RECONCILIATION", apres: new Date(Date.now() + 4_000), tentativesMax: 3 });
   } catch (erreur) {
     console.error("[a-faire] passage des détecteurs non demandé :", erreur);
   }

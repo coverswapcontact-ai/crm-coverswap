@@ -11,6 +11,7 @@ import { enregistrerTachesEncaissements } from "@/lib/encaissements/reprise";
 import { enregistrerTachesEspace } from "@/lib/espace/taches";
 import { enregistrerTachesRedimensionnement } from "@/lib/fichiers/redimensionnement";
 import { enregistrerTachesMail } from "@/lib/mail/taches";
+import { enregistrerTachesMessagerie } from "@/lib/messagerie/taches";
 import { enregistrerTachesMessages } from "@/lib/messages/taches";
 import { enregistrerTachesMeta } from "@/lib/meta/taches";
 import { enregistrerTachesCorbeille } from "@/lib/prospects/corbeille";
@@ -77,6 +78,7 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesRedimensionnement();
   enregistrerTachesRappels();
   enregistrerTachesAFaire();
+  enregistrerTachesMessagerie();
   enregistrerTachesAnalytiqueCalculs();
   enregistrerTachesAnalytique();
 }

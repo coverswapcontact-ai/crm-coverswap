@@ -13,7 +13,11 @@ simulateur CRM et générateur de prompts » (transcript de la session).
 - Rien ne se supprime, tout s'archive. Sauvegarde avant migration (automatique au démarrage).
 - Aucun secret en dur ; ne jamais lire ni afficher `.env.local` ni les variables Railway.
 - `src/proxy.ts` porte une garde de connexion locale : **ne jamais la commiter** (`git add` par chemins).
-- Aucun envoi automatique hors accusé de réception : le SMS « simulations prêtes » part du clic
+- Envois automatiques (règle mise à jour par la mission 25, le 10/10/2026) : en mode d'envoi **Manuel**
+  (`MESSAGERIE_MODE_ENVOI`, le réglage actuel), **aucun SMS ne part seul** — la messagerie prépare, Lucas envoie
+  depuis son téléphone et confirme ; l'ancien accusé de réception par le fournisseur est remplacé par A1, préparé.
+  En mode **Android** (lot 8, pas encore branché), seuls les messages de la liste validée réglés **Auto** (et validés)
+  partiront seuls ; tous les autres restent en Validation. Le SMS « simulations prêtes » ne part toujours que du clic
   « Publier » de Lucas, texte visible et décochable.
 - Tests sur base d'essai, jamais sur la prod. Rien pousser qui ne tourne pas (tests, eslint, build).
 - Coût des essais OpenAI : ≈ 0,21 $ + 0,066 $ par échantillon ; une simulation API réelle demandée
@@ -5790,3 +5794,47 @@ Ce qui reste dans E2 (≈ 0,64 $) n'est pas reporté sans une ligne écrite ici.
 - Regard à pleine taille (masque automatique en rouge sur le dessin en vert, `sunburst-23/masques-auto/surimpression/`, itération `gpt-4.1`) : **v02, le meilleur** (contre-jour fort) — les quatre groupes de hauts sont trouvés, mais en rectangles posés 5 % trop bas qui mordent la crédence, la niche ouverte et le mur de gauche sont pris, le haut au-dessus de la hotte est oublié ; **p05, le pire** — le modèle entoure les étagères ouvertes, le mur et les objets posés au-dessus, et rate presque tous les hauts gris : inutilisable ; **p01, contre-jour** — la suite de droite est à sa place mais coupée à mi-hauteur, celle de gauche devient une barre verticale qui descend sur le sol, le four est pris dans le polygone du milieu ; **v01, capture d'écran** — les bas sont trouvés grossièrement, mais la colonne four et le haut de gauche sont ajoutés et la table du premier plan est prise. Aucun des quatre ne servirait de masque à Sunburst sans retouche.
 - **Coût réel de S1 : 0,0822 $** (32 appels vision, aucun raté, aucun rendu) ; **cumul de la campagne : 0,0822 $ / 2,30 $** ; il reste 0,1478 $ dans E1, non reporté.
 - **Verdict : barre non atteinte** (il faut un IoU médian ≥ 0,8 ; on est à 0,43 au mieux, avec des façades entières manquées). Le masque automatique par polygones d'un modèle vision n'est pas prêt, ni en `gpt-4.1-mini` ni en `gpt-4.1`. **S2 utilise le masque dessiné de la mission 24** (`sunburst-24/masques.json`, troué en C3), avec `--masque dessine` ; S3 ne peut donc pas « confirmer les familles fortes avec le masque automatique » : il les confirme avec le masque dessiné, et S4 avec les masques dessinés des photos w01-w04, prévus avant S4. Les polygones automatiques (`sunburst-23/masques-auto/*.json`, copies `-v1` et `-v2`) ne doivent pas être lus par `rendre.ts` : seules ces copies suffixées restent, si bien que `rendre.ts` sans `--masque dessine` s'arrête (« Pas de masque automatique ») au lieu de rendre sur un mauvais masque. **Toutes les commandes de S2 à S4 portent donc `--masque dessine`** (vérifié sans appel : p04 × K4, tour 1, cible #A3916D, autorisé dans E2). Une source de masque reste à trouver pour la production (segmentation dédiée, ou zone tracée par le client) : décision de Lucas, hors de cette campagne.
+
+---
+
+# Mission 25 (10/10/2026) — Relances préparées par l'IA, journal vivant « Où on en est », messagerie du CRM
+
+Énoncé : consigne du gérant du 10/10 + cahier des charges « Relances et messagerie CoverSwap » (version du 10/10,
+copie hors dépôt : `~/Downloads/prompt.md`). Lots 1 à 7 d'une traite ; arrêt seulement devant une action
+irréversible sur de vraies données, une règle impossible ou une dépense. Branche `mission-25` (partie de `main`
+a8cfe0d, qui porte les missions 23-24 non poussées). Conception : `docs/MESSAGERIE.md`.
+
+## Cadre tenu
+- Mode d'envoi **Manuel** : aucun SMS ne part seul (pas de fournisseur Android) ; les essais passent par le
+  fournisseur simulateur. Migrations additives seulement ; rien supprimé sans remplacement ; devis, espace client,
+  mails, simulateur intacts. Aucun secret lu ; aucun nom ni numéro de client dans le dépôt (démo : plage de fiction
+  06 39 98, à partir de 0639980018).
+- Anciens leads (avant le 25/09/2026) : bouton « Archiver les anciens leads » avec le nombre exact ; rien archivé
+  par la mission.
+- Chaque lot : tests (compteur jamais en baisse), tsc, lint, build, commit, une ligne ici.
+
+## Architecture retenue (détail : docs/MESSAGERIE.md)
+- `src/lib/messagerie/` : un **suivi** par dossier (ou par lead sans dossier) = faits, « Où on en est » (3 lignes),
+  journal (lignes datées, clé unique = rejouable), prochaine action ; une **file de messages préparés**
+  (`MessagePrepare`, clé unique par intention : A1:lead:…, D1:<devis>…).
+- Boucle : tout geste appelle déjà `signalerChangementTaches()` → mise en file d'un **balayage** (`MESSAGERIE_SCAN`,
+  4 s, RECONCILIATION) qui repère les suivis touchés (15 dernières minutes, toutes sources) et met en file leur
+  **analyse** (`MESSAGERIE_ANALYSE:<suivi>`, 90 s après le dernier message d'un client, 2 s sinon). Le travail
+  périodique de 15 min (`messagerie-moteur`) rattrape tout et applique horaires, garde de silence, plafonds,
+  démarrage en douceur ; une tâche par quart d'heure (`MESSAGERIE_ECHEANCE:<quart>`) rend les messages dus et
+  envoie UNE alerte groupée (push du CRM seulement).
+- Analyse = état du dossier + nouveaux éléments depuis le curseur → lignes de journal, faits (règles, puis IA si
+  active), intentions de messages (planificateur pur, liste fermée), « Où on en est » et prochaine action (règles ;
+  l'IA peut réécrire les lignes 1-2, contrôlées). Sans IA (pause, plafond) : même travail par règles fixes.
+
+## Avancement (une ligne par lot)
+- Départ : CRM `main` a8cfe0d (1 763 tests d'après la reprise de la mission 23).
+- Lots 1 et 2 (socle et moteur, 10/10) : modèles `Suivi`, `LigneJournalSuivi`, `MessagePrepare`, `ModeleSms.mode` ;
+  paramètres du groupe « Messagerie et relances » et `IA_MESSAGERIE`, `IA_MESSAGERIE_BUDGET` ; `src/lib/messagerie/`
+  (catalogue des 41 messages, horaires et fériés, zone à 25 km de Pérols, prénom fiable, contrôleur, règles sans IA,
+  état lu, planificateur, garde de silence, « Où on en est », analyse, moteur, gestes, vues, tâches de fond) ; boucle
+  branchée sur `signalerChangementTaches()` et sur l'arrivée d'un lead (A1 remplace l'accusé par le fournisseur) ;
+  circuit des mails de relance de 6 h arrêté ; anonymisation RGPD étendue aux trois modèles ; routes
+  `/api/messagerie/*`. Tests : 1 763 → 1 805 (`regles-pures.test.ts` 27, `scenario.test.ts` 14 : le scénario
+  « Démo Messagerie » du cahier en 8 étapes, rejeu sans doublon, STOP, pause générale, démarrage en douceur, 19 h 30).
+  Conception et décisions prises seul : `docs/MESSAGERIE.md` § 5. Règle des envois automatiques mise à jour en tête.

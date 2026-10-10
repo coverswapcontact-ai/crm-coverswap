@@ -26,9 +26,10 @@ export const CLES_PARAMETRES_IA = ["IA_AGENT_MAIL", "IA_MODELE", "IA_PRIX_ENTREE
  * et la rédaction à la demande de Lucas (IA_REDACTION : brouillons de mails, guide de style).
  * Le modèle, ses prix et le budget mensuel sont communs.
  */
-export type InterrupteurIa = "IA_AGENT_MAIL" | "IA_REDACTION";
+export type InterrupteurIa = "IA_AGENT_MAIL" | "IA_REDACTION" | "IA_MESSAGERIE";
 const USAGES_REDACTION = ["REDACTION_MAIL", "GUIDE_STYLE"];
-export const interrupteurDe = (usage: string): InterrupteurIa => (USAGES_REDACTION.includes(usage) ? "IA_REDACTION" : "IA_AGENT_MAIL");
+/** Mission 25 : l'analyse de la messagerie (usages « MESSAGERIE_… ») a son propre interrupteur, IA_MESSAGERIE. */
+export const interrupteurDe = (usage: string): InterrupteurIa => (usage.startsWith("MESSAGERIE") ? "IA_MESSAGERIE" : USAGES_REDACTION.includes(usage) ? "IA_REDACTION" : "IA_AGENT_MAIL");
 
 export type DemandeModele = {
   modele: string;
@@ -120,7 +121,7 @@ async function lireReglages(maintenant: Date, interrupteur: InterrupteurIa = "IA
   if (!crmActif) raison = RAISON_VIA_ASSISTANT;
   else if (!cleApi) raison = "Clé ANTHROPIC_API_KEY absente des variables d'environnement du serveur.";
   else if (manquants.length > 0) raison = "Réglages à renseigner dans Paramètres (modèle, prix, budget, interrupteur).";
-  else if (pause) raison = interrupteur === "IA_REDACTION" ? "Rédaction par l'IA en pause (Paramètres → Agent mail et IA)." : "En pause (Paramètres → Agent mail et IA).";
+  else if (pause) raison = interrupteur === "IA_REDACTION" ? "Rédaction par l'IA en pause (Paramètres → Agent mail et IA)." : interrupteur === "IA_MESSAGERIE" ? "Analyse de la messagerie par l'IA en pause (Paramètres → Agent mail et IA)." : "En pause (Paramètres → Agent mail et IA).";
   else if (budget !== null && depense >= budget) raison = `Budget du mois atteint (${depense.toFixed(2).replace(".", ",")} € sur ${budget.toFixed(2).replace(".", ",")} €).`;
 
   const etat: EtatIa = {

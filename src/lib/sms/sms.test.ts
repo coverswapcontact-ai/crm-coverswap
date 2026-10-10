@@ -226,17 +226,24 @@ describe("fil d'une conversation", () => {
   });
 });
 
-describe("accusé de réception automatique", () => {
+describe("accusé de réception automatique (ancien circuit par le fournisseur, gardé pour le lot 8)", () => {
+  test("mission 25 : à l'arrivée d'un lead, plus rien ne part par le fournisseur — A1 est préparé dans la messagerie", async () => {
+    const lead = await prisma.lead.create({ data: { prenom: "Noé", nom: "Essai", telephone: "+33688888877", ville: "Pérols", source: "META_ADS" } });
+    assert.deepEqual(await accuse.envoyerAccuseDeReception(lead.id), { envoye: false, raison: "remplacé par A1 (messagerie)" });
+    assert.equal(await prisma.sms.count({ where: { leadId: lead.id } }), 0);
+    assert.equal(await prisma.tache.count({ where: { cle: "messagerie:scan" } }), 1, "le balayage de la messagerie est demandé");
+  });
+
   test("part une fois, pour un mobile français, avec le prénom — jamais deux fois", async () => {
     const lead = await prisma.lead.create({ data: { prenom: "Élise", nom: "Garcia", telephone: "+33688888888", ville: "Pérols", source: "META_ADS" } });
     const mardi10h = new Date("2026-09-22T08:00:00Z"); // 10 h à Paris
-    const premier = await accuse.envoyerAccuseDeReception(lead.id, mardi10h);
+    const premier = await accuse.envoyerAccuseParFournisseur(lead.id, mardi10h);
     assert.deepEqual([premier.envoye, premier.raison], [true, "ACCUSE_RECEPTION"]);
     const sms = await prisma.sms.findUnique({ where: { id: premier.smsId! } });
     assert.match(sms?.texte ?? "", /^Bonjour Élise, Lucas de CoverSwap\. Merci pour votre demande, je vous appelle dans les prochaines minutes\./);
     assert.deepEqual([sms?.origine, sms?.modele], ["ACCUSE_AUTO", "ACCUSE_RECEPTION"]);
 
-    const second = await accuse.envoyerAccuseDeReception(lead.id, mardi10h);
+    const second = await accuse.envoyerAccuseParFournisseur(lead.id, mardi10h);
     assert.equal(second.envoye, false);
     // L'accusé ne vaut pas prise de contact : le contact reste « à traiter ».
     await partir(sms!.id);
@@ -249,21 +256,21 @@ describe("accusé de réception automatique", () => {
     assert.equal(accuse.estHeureOuvree(new Date("2026-09-20T10:00:00Z")), false, "dimanche");
 
     const soir = await prisma.lead.create({ data: { prenom: "Paul", nom: "Morel", telephone: "+33699999990", ville: "Sète", source: "META_ADS" } });
-    const resultat = await accuse.envoyerAccuseDeReception(soir.id, new Date("2026-09-22T21:00:00Z"));
+    const resultat = await accuse.envoyerAccuseParFournisseur(soir.id, new Date("2026-09-22T21:00:00Z"));
     assert.equal(resultat.raison, "ACCUSE_RECEPTION_HORS_HORAIRES");
     assert.match((await prisma.sms.findUnique({ where: { id: resultat.smsId! } }))?.texte ?? "", /dès demain matin/);
 
     const fixe = await prisma.lead.create({ data: { prenom: "Fixe", nom: "Test", telephone: "0467000000", ville: "Montpellier", source: "META_ADS" } });
-    assert.equal((await accuse.envoyerAccuseDeReception(fixe.id)).envoye, false);
+    assert.equal((await accuse.envoyerAccuseParFournisseur(fixe.id)).envoye, false);
     const factice = await prisma.lead.create({ data: { prenom: "Test", nom: "Meta", telephone: "<test lead: dummy data for phone_number>", ville: "Paris", source: "META_ADS" } });
-    assert.equal((await accuse.envoyerAccuseDeReception(factice.id)).envoye, false, "lead sans téléphone valide");
+    assert.equal((await accuse.envoyerAccuseParFournisseur(factice.id)).envoye, false, "lead sans téléphone valide");
   });
 
   test("accusé coupé dans Paramètres : rien ne part", async () => {
     const modele = await modeles.lireModele("ACCUSE_RECEPTION");
     await modeles.modifierModele(modele!.id, { actif: false });
     const lead = await prisma.lead.create({ data: { prenom: "Inès", nom: "Petit", telephone: "+33612121212", ville: "Lattes", source: "META_ADS" } });
-    assert.deepEqual(await accuse.envoyerAccuseDeReception(lead.id), { envoye: false, raison: "accusé de réception désactivé" });
+    assert.deepEqual(await accuse.envoyerAccuseParFournisseur(lead.id), { envoye: false, raison: "accusé de réception désactivé" });
     await modeles.modifierModele(modele!.id, { actif: true });
   });
 });

@@ -25,6 +25,7 @@ export const GROUPES_PARAMETRES = {
   AGENT: "Agent mail et IA",
   SIMULATEUR: "Simulateur",
   PUBLICITE: "Campagne publicitaire",
+  MESSAGERIE: "Messagerie et relances",
 } as const;
 export type GroupeParametre = keyof typeof GROUPES_PARAMETRES;
 
@@ -256,6 +257,55 @@ export const DEFINITIONS_PARAMETRES = {
   IA_BUDGET_MENSUEL: {
     libelle: "Budget mensuel de l'IA",
     aide: "Plafond en euros par mois civil, pour tout ce que fait l'IA (lecture des mails, brouillons, guide de style). Une fois atteint, elle s'arrête jusqu'au mois suivant ; le tri de la boîte, lui, continue (il n'utilise pas l'IA).",
+    nature: "euros",
+    groupe: "AGENT",
+  },
+  // Mission 25 : la messagerie et les relances préparées (src/lib/messagerie). Sans valeur saisie : Manuel, active.
+  MESSAGERIE_MODE_ENVOI: {
+    libelle: "Mode d'envoi des SMS",
+    aide: "Manuel (aujourd'hui) : chaque message préparé t'attend ; tu l'envoies depuis ton téléphone (« Ouvrir Messages ») et tu confirmes « Envoyé ». Android (lot 8, pas encore branché) : seuls les messages réglés Auto partiront seuls, par le téléphone Android. Rien d'autre ne change : conversations, historique et réglages restent.",
+    nature: "choix",
+    options: [
+      { valeur: "MANUEL", libelle: "Manuel" },
+      { valeur: "ANDROID", libelle: "Android (lot 8, pas encore branché)" },
+    ],
+    groupe: "MESSAGERIE",
+  },
+  MESSAGERIE_PAUSE: {
+    libelle: "Préparation des messages",
+    aide: "Active (par défaut) : le CRM prépare les messages et les relances à l'heure prévue. En pause : « Tout mettre en pause » arrête toutes les préparations et tous les envois d'un coup ; le journal et « Où on en est » restent à jour.",
+    nature: "choix",
+    options: [
+      { valeur: "ACTIVE", libelle: "Active" },
+      { valeur: "EN_PAUSE", libelle: "En pause" },
+    ],
+    groupe: "MESSAGERIE",
+  },
+  MESSAGERIE_LANCEMENT: {
+    libelle: "Mise en service de la messagerie",
+    aide: "Posé au premier démarrage de la messagerie (instant au format ISO). Rien n'est préparé pour un fait plus ancien (devis mis en ligne, lead reçu avant) ; les dossiers ouverts avant ne donnent que des propositions pendant 14 jours, 8 par jour au plus. Il n'y a rien à saisir ici.",
+    nature: "texte",
+    groupe: "MESSAGERIE",
+  },
+  MESSAGERIE_LIEN_AVIS: {
+    libelle: "Lien direct vers la fiche Google (avis)",
+    aide: "Le lien qui ouvre la page « Donner un avis » de la fiche Google de CoverSwap (fiche Google → Demander des avis → copier le lien). Les demandes d'avis (C4, C5) le portent ; sans lien saisi, elles portent celui de l'espace du client (rubrique « Après le chantier »).",
+    nature: "texte",
+    groupe: "MESSAGERIE",
+  },
+  IA_MESSAGERIE: {
+    libelle: "Analyse des messages et des notes par l'IA",
+    aide: "Active : chaque réponse d'un client, chaque note et chaque relance à personnaliser passe par le modèle (Claude Haiku conseillé ; moins d'un centime par analyse), plafonné par le budget ci-dessous et par le budget mensuel. En pause, ou plafond atteint : la même analyse se fait par des règles fixes (le message validé tel quel). L'IA ne décide jamais de ce qui part.",
+    nature: "choix",
+    options: [
+      { valeur: "ACTIVE", libelle: "Active" },
+      { valeur: "EN_PAUSE", libelle: "En pause" },
+    ],
+    groupe: "AGENT",
+  },
+  IA_MESSAGERIE_BUDGET: {
+    libelle: "Plafond mensuel de l'IA de la messagerie",
+    aide: "En euros par mois civil, pour l'analyse des messages et des notes (10 € sans valeur saisie). Une alerte part à 80 % ; au plafond, la messagerie continue par les règles fixes jusqu'au mois suivant.",
     nature: "euros",
     groupe: "AGENT",
   },

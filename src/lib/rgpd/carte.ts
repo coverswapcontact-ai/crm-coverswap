@@ -163,6 +163,17 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   // Mission 10 (23/09/2026) : ce que l'assistant a modifié (valeurs d'avant et d'après, phrase de Lucas) et les messages de l'espace.
   ModificationDossier: { remplacer: () => ({ champs: "[]", commande: null }), garde: "dates, acteur et annulation : la trace qu'une modification a eu lieu, sans ses valeurs" },
   MessageEspace: { remplacer: () => ({ texte: EFFACE }), garde: "auteur, source, dates (lu, notifié) : la mesure des échanges, sans leur contenu" },
+  // Mission 25 : la messagerie. Le suivi perd son nom, son numéro, ses faits et ses trois lignes ; le journal et les
+  // messages préparés perdent leurs textes. Restent les codes, statuts et dates : la mesure des relances, sans identité.
+  Suivi: {
+    remplacer: (_ligne, contexte) => ({ nom: nomAnonyme(contexte), telephone: null, faits: "{}", ouEnEst: "{}", ouEnEstManuel: null, etat: "{}", dernierExtrait: null, prochaineAction: null, pauseMotif: null }),
+    garde: "dates, pause et STOP : la mesure de la messagerie, sans identité",
+  },
+  LigneJournalSuivi: { remplacer: () => ({ texte: EFFACE }), garde: "acteur et date de chaque ligne" },
+  MessagePrepare: {
+    remplacer: () => ({ texte: EFFACE, texteValide: EFFACE, texteEnvoye: null, destinataire: null, raison: null, motif: null }),
+    garde: "code, canal, statut et dates : les taux de réponse par message, sans contenu",
+  },
   // Mission 17 (partie C) : la trace commune des modifications de l'outil « modifier » (valeurs d'avant et d'après, nom de
   // ce qui a été modifié, phrase de Lucas). Sans colonne de lien : l'anonymisation la retrouve par (entite,
   // enregistrementId) sur les enregistrements de la personne (lead, dossier, fiche, coordonnées, notes d'appel,

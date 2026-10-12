@@ -91,6 +91,9 @@ export const STATUTS_MESSAGE = ["PREVU", "A_ENVOYER", "A_VALIDER", "ENVOYE", "NO
 export type StatutMessage = (typeof STATUTS_MESSAGE)[number];
 export const STATUTS_OUVERTS: StatutMessage[] = ["PREVU", "A_ENVOYER", "A_VALIDER"];
 
+/** Corrections du 12/10 : 8 propositions par jour au plus, toutes situations confondues (moteur.ts, vues.ts). */
+export const PROPOSITIONS_PAR_JOUR = 8;
+
 export type CanalMessage = "SMS" | "MAIL" | "ESPACE";
 
 export const RAISONS_NON_ENVOI = ["DEJA_FAIT_TELEPHONE", "PLUS_PERTINENT", "AUTRE"] as const;
@@ -114,6 +117,8 @@ export type MessageConnu = {
   nonConfirmeLe: Date | null;
   reponse: boolean;
   douceur: boolean;
+  /** Pourquoi il a été retenu, annulé ou non envoyé (« annulé par toi », « remplacé par D4 : … »). */
+  motif?: string | null;
 };
 
 /* ── État lu d'un dossier ou d'un lead ──────────────────────────────────────── */

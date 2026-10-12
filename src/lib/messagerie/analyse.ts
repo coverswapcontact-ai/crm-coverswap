@@ -23,11 +23,14 @@ import { classerMessage, faitsDuMessage, fusionnerFaits, lireNote, LIBELLES_CLAS
 import { enDouceur, lancementMessagerie, suiviPour } from "./suivis";
 import { controlerOuEnEst, texteControle } from "./controleur";
 import { formuleBonjour, remplirTexte, texteDeLaListe } from "./texte";
-import type { EtatSuivi, Intention, OuEnEst } from "./types";
+import { PROPOSITIONS_PAR_JOUR, type EtatSuivi, type Intention, type OuEnEst } from "./types";
 
-/** Plafonds du cahier : 40 messages préparés par jour, 8 propositions du démarrage en douceur. */
+/**
+ * Plafonds du cahier : 40 messages préparés par jour ; 8 propositions par jour au plus, toutes situations confondues
+ * (corrections du 12/10 : comptées quand elles passent « À valider », moteur.ts, et dans la file du jour, vues.ts).
+ */
 export const MESSAGES_PAR_JOUR = 40;
-export const PROPOSITIONS_DOUCES_PAR_JOUR = 8;
+export const PROPOSITIONS_DOUCES_PAR_JOUR = PROPOSITIONS_PAR_JOUR;
 
 const CLE_CRENEAUX = "__coverswapCreneauxMessagerieEssai";
 const globalEssai = globalThis as unknown as Record<string, ((maintenant: Date) => Promise<string[] | null>) | undefined>;
@@ -60,9 +63,10 @@ export async function ecrireLigne(suiviId: string, ligne: { cle: string; le: Dat
   }
 }
 
-async function compterCreesAujourdhui(maintenant: Date, douceur: boolean): Promise<number> {
+/** Les messages préparés aujourd'hui, hors réponses et hors démarrage en douceur (plafonné à part, moteur.ts). */
+async function compterCreesAujourdhui(maintenant: Date): Promise<number> {
   const debut = new Date(maintenant.getTime() - (momentParis(maintenant).minutes + 1) * 60_000);
-  return prisma.messagePrepare.count({ where: { ...AVEC_ARCHIVES, createdAt: { gte: debut }, reponse: false, ...(douceur ? { douceur: true } : {}) } });
+  return prisma.messagePrepare.count({ where: { ...AVEC_ARCHIVES, createdAt: { gte: debut }, reponse: false, douceur: false } });
 }
 
 export type ResultatAnalyse = { suiviId: string; crees: string[]; annules: number; ia: boolean; ouEnEst: OuEnEst | null };
@@ -250,6 +254,15 @@ export async function analyserSuivi(suiviId: string, maintenant: Date = new Date
       const { count } = await prisma.messagePrepare.updateMany({ where: { suiviId: suivi.id, statut: { in: ["PREVU", "A_ENVOYER", "A_VALIDER"] } }, data: { statut: "ANNULE", motif: "STOP" } });
       if (count) await ecrireLigne(suivi.id, { cle: `stop:${suivi.id}`, le: maintenant, acteur: "IA", texte: "STOP : plus aucun message ne part à ce client" });
     }
+    // Corrections du 12/10 : le client a écrit — une relance déjà dans la file (à envoyer, à valider) repasse « prévue » :
+    // un seul message à la fois, sa réponse d'abord ; la garde la fait ensuite attendre (« le client a répondu »).
+    if (messagesAAnalyser.length && !etat.stop) {
+      const enFile = await prisma.messagePrepare.findMany({ where: { suiviId: suivi.id, statut: { in: ["A_ENVOYER", "A_VALIDER"] }, reponse: false }, select: { id: true, code: true } });
+      for (const m of enFile.filter((x) => estRelance(x.code))) {
+        await prisma.messagePrepare.update({ where: { id: m.id }, data: { statut: "PREVU", prevuLe: maintenant, motif: "le client a écrit : sa réponse passe d'abord" } });
+        await ecrireLigne(suivi.id, { cle: `msg:${m.id}:attente:${maintenant.toISOString()}`, le: maintenant, acteur: "IA", texte: `${libelleDuCode(m.code)} remis en attente : le client a écrit, sa réponse passe d'abord` });
+      }
+    }
     const douceur = enDouceur(suivi, lancement, maintenant);
     for (const intention of [...intentionsReponse, ...plan.intentions]) {
       if (etat.stop) break;
@@ -270,7 +283,7 @@ export async function analyserSuivi(suiviId: string, maintenant: Date = new Date
   const messages = await prisma.messagePrepare.findMany({ where: { ...AVEC_ARCHIVES, suiviId: suivi.id } });
   const etatFinal: EtatSuivi = {
     ...etat,
-    messages: messages.map((m) => ({ id: m.id, code: m.code, cle: m.cle, statut: m.statut as EtatSuivi["messages"][number]["statut"], prevuLe: m.prevuLe, envoyeLe: m.envoyeLe, createdAt: m.createdAt, ouvertLe: m.ouvertLe, nonConfirmeLe: m.nonConfirmeLe, reponse: m.reponse, douceur: m.douceur })),
+    messages: messages.map((m) => ({ id: m.id, code: m.code, cle: m.cle, statut: m.statut as EtatSuivi["messages"][number]["statut"], prevuLe: m.prevuLe, envoyeLe: m.envoyeLe, createdAt: m.createdAt, ouvertLe: m.ouvertLe, nonConfirmeLe: m.nonConfirmeLe, reponse: m.reponse, douceur: m.douceur, motif: m.motif })),
   };
   const parRegles = ouEnEstParRegles(etatFinal, plan, maintenant);
   let ouEnEst: OuEnEst = parRegles.ouEnEst;
@@ -340,23 +353,22 @@ async function preparer(suiviId: string, etat: EtatSuivi, intention: Intention, 
   if (etat.messages.some((m) => m.cle === intention.cle)) return null;
   const reponse = intention.code === "REPONSE" || (estCodeMessage(intention.code) && definitionMessage(intention.code as CodeMessage).nature === "REACTIF") || intention.cle.startsWith("REPONSE:");
   const douceur = douceurActive && estRelance(intention.code);
-  if (!reponse) {
-    if ((await compterCreesAujourdhui(maintenant, false)) >= MESSAGES_PAR_JOUR) return null;
-    if (douceur && (await compterCreesAujourdhui(maintenant, true)) >= PROPOSITIONS_DOUCES_PAR_JOUR) return null;
-  }
+  if (!reponse && !douceur && (await compterCreesAujourdhui(maintenant)) >= MESSAGES_PAR_JOUR) return null;
   const brouillon = await rediger(etat, intention, surcharges, maintenant);
   if ("refus" in brouillon) {
     await ecrireLigne(suiviId, { cle: `refus:${intention.cle}`, le: maintenant, acteur: "IA", texte: `${libelleDuCode(intention.code)} non préparé : ${brouillon.refus}` });
     return null;
   }
-  const id = await ecrireMessage(suiviId, { ...brouillon, reponse: brouillon.reponse || reponse }, douceur ? "A_VALIDER" : "PREVU", { douceur });
+  // Corrections du 12/10 : une proposition du démarrage en douceur naît « prévue » comme les autres ; à son heure, la garde
+  // passe et elle devient « À valider », 8 par jour au plus (moteur.ts).
+  const id = await ecrireMessage(suiviId, { ...brouillon, reponse: brouillon.reponse || reponse }, "PREVU", { douceur });
   if (!id) return null;
   const quand = brouillon.prevuLe.getTime() - maintenant.getTime() > 5 * 60_000 ? ` pour ${jourCourt(brouillon.prevuLe)} ${horodatageCourt(brouillon.prevuLe).slice(6)}` : "";
   await ecrireLigne(suiviId, {
     cle: `msg:${id}:prepare`,
     le: maintenant,
     acteur: "IA",
-    texte: `${libelleDuCode(brouillon.code)} ${douceur ? "proposé (démarrage en douceur)" : "préparé"}${quand} : ${brouillon.raison}${brouillon.ecartControle ? ` (texte de l'IA écarté : ${brouillon.ecartControle})` : ""}`,
+    texte: `${libelleDuCode(brouillon.code)} préparé${douceur ? " (démarrage en douceur : à valider)" : ""}${quand} : ${brouillon.raison}${brouillon.ecartControle ? ` (texte de l'IA écarté : ${brouillon.ecartControle})` : ""}`,
   });
   return id;
 }

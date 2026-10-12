@@ -2439,6 +2439,7 @@ model MessagePrepare {
   mode           String    @default("VALIDATION") // AUTO | VALIDATION | DESACTIVE : utile en mode Android seulement
   reponse        Boolean   @default(false) // répond à un geste du client : passe la garde de silence
   douceur        Boolean   @default(false) // démarrage en douceur : une proposition, sans alerte
+  proposeLe      DateTime? // corrections du 12/10 : proposé (« À valider ») ce jour-là ; 8 propositions par jour au plus
   raison         String? // pourquoi il est préparé
   motif          String? // pourquoi il est retenu, annulé ou non envoyé
   ia             Boolean   @default(false) // texte personnalisé ou rédigé par l'IA

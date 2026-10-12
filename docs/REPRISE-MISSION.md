@@ -5917,7 +5917,7 @@ a8cfe0d, qui porte les missions 23-24 non poussées). Conception : `docs/MESSAGE
   8. Dans Claude (connecteur reconnecté) : « Lis-moi la file du jour » (outil `file_du_jour`).
   9. Messagerie → menu → « Tout mettre en pause » (bandeau), puis « Relancer la messagerie ».
   10. Leads → « Archiver les anciens leads (N) » : le nombre, la confirmation, puis le compteur à 0 (« Annuler » les rend).
-- **Lots 8 et 9 (après la mission)** — détail technique : docs/MESSAGERIE.md § 6.
+- **Lots 8 et 9 (après la mission)** — détail technique : docs/MESSAGERIE.md § 7.
   - Lot 8, passerelle Android : vérifier d'abord que le forfait de l'Android autorise les envois automatisés (point du
     cahier encore ouvert) ; fournisseur « android » (SMS Gateway for Android : envoi par son API, réception par webhook
     signé), clés posées par Lucas sur Railway ; bascule `MESSAGERIE_MODE_ENVOI` → Android (seuls les messages Auto et
@@ -5927,3 +5927,29 @@ a8cfe0d, qui porte les missions 23-24 non poussées). Conception : `docs/MESSAGE
     appel sortant → la carte « Qu'est-ce qui s'est dit ? » sans rien taper, appel entrant manqué → A3 (déjà dans la
     liste, préparé dès que l'appel est signalé), et la garde de silence voit les appels sans saisie.
 
+## Corrections du 12/10 (après la première file du jour)
+Énoncé du gérant (12/10) : « 1. Un seul message préparé par client à la fois : garde le plus avancé (D4 avant D2, D3
+avant D4 si le devis a été ouvert), annule l'autre. 2. Prénom fiable = seulement si le prénom est séparé du nom dans la
+fiche ET n'est pas le nom de famille, un pseudo ou un surnom. Lead et fiche client avec des noms différents : pas de
+prénom. Sinon « Bonjour, ». 3. Retire de « Appels à passer » les dossiers perdus, les rappels passés depuis plus de
+7 jours (propose-les en « Sans suite ») et les cartes qui sont en fait des messages à valider. 4. Démarrage en douceur :
+8 propositions par jour maximum, toutes situations confondues. Tests, puis déploie. »
+- Causes trouvées dans la file réelle du 12/10 (lue par le connecteur, lecture seule) : le planificateur préparait
+  chaque relance en retard séparément (D2 et D4 d'un même devis) ; les propositions du démarrage en douceur naissaient
+  « À valider » sans passer la garde, plafonnées à la création seulement (15 ouvertes) ; le prénom était le premier mot
+  du champ prénom, sans vérifier que les fiches parlent de la même personne ni que c'est un prénom (surnoms, nom de
+  famille inversé) ; « Appels à passer » prenait tout rappel passé, quel que soit son âge, y compris pour un dossier
+  perdu, et doublait les cartes « À valider ».
+- Fait (détail et décisions : docs/MESSAGERIE.md § 6) : `messagerie/unicite.ts` (rang dans l'étape : D2 < D4 < D3 <
+  D5…) branché dans le planificateur (la plus avancée préparée, la moins avancée annulée « remplacé par D4 : un seul
+  message à la fois ») et dans la garde ; relance déjà dans la file remise « prévue » quand le client écrit ; un seul
+  message à la fois par numéro ; `prenomFiable` refait + `messagerie/prenoms.ts` (prénoms reconnus) ; `fileDuJour` :
+  une carte par client, appels sans perdus ni clients déjà dans la file, rappel de plus de 7 jours proposé « Sans
+  suite » (bouton « Classer sans suite », action `sans-suite`), 8 propositions au plus ; propositions douces créées
+  « prévues », passées « À valider » par le moteur (8 par jour, jamais plus de 8 en attente ; colonne additive
+  `MessagePrepare.proposeLe`) ; migration `messagerie-corrections-12-10` pour les messages déjà préparés (doublons,
+  salutations, 8 propositions ; rien envoyé, rien classé). Registre MCP inchangé (62 outils, `078a14e54436`).
+- Tests : 1 843 → 1 858 (`regles-pures.test.ts` : prénom fiable refait, six cas d'unicité ; `corrections.test.ts`, 9 :
+  file du jour, « Classer sans suite », 8 propositions, réponse du client, prénom en vrai, migration rejouable) ; un
+  test Meta à date fixe réparé au passage (`pont.test.ts` : sa fenêtre de 21 jours ne couvrait plus le lead d'essai du
+  20/09 depuis le 11/10). tsc et lint à 0, build vert.

@@ -176,6 +176,38 @@ export async function validerProposition(id: string, maintenant: Date = new Date
   await demanderAnalyse(suivi.id);
 }
 
+/**
+ * Corrections du 12/10 — « Classer sans suite » (carte « Un par un ») : un rappel passé depuis plus de 7 jours, trois
+ * appels et trois messages sans réponse, ou le message « dossier en pause » resté sans nouvelles. Un lead sans dossier
+ * passe Perdu (« plus de réponse ») ; un dossier passe Perdu par la fonction de l'écran (mêmes vérifications). Rien
+ * n'est envoyé au client ; l'analyse annule ce qui restait prévu.
+ */
+export async function classerSansSuite(suiviId: string, maintenant: Date = new Date()): Promise<{ classe: "DOSSIER" | "LEAD" | null }> {
+  const suivi = await suiviExige(suiviId);
+  const precision = "Classé sans suite depuis la messagerie : plus de réponse";
+  let classe: "DOSSIER" | "LEAD" | null = null;
+  if (suivi.dossierId) {
+    const dossier = await prisma.dossier.findUnique({ where: { id: suivi.dossierId }, select: { etape: true } });
+    if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
+    if (dossier.etape !== "PERDU") {
+      const { changerEtape } = await import("@/lib/dossiers/transitions");
+      await changerEtape(suivi.dossierId, { vers: "PERDU", motifPerte: "SANS_REPONSE", perteCommentaire: precision });
+      classe = "DOSSIER";
+    }
+  } else if (suivi.leadId) {
+    const lead = await prisma.lead.findUnique({ where: { id: suivi.leadId }, select: { statut: true } });
+    if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
+    if (lead.statut !== "PERDU") {
+      const { modifierEntrant } = await import("@/lib/prospects/entrants");
+      await modifierEntrant(suivi.leadId, { statut: "PERDU", motifPerte: "SANS_REPONSE", motif: precision });
+      classe = "LEAD";
+    }
+  } else throw new ErreurMetier("Ni dossier ni contact à classer.", 409);
+  if (classe) await ecrireLigne(suivi.id, { cle: `sans-suite:${maintenant.toISOString()}`, le: maintenant, acteur: "TOI", texte: classe === "DOSSIER" ? "Dossier classé sans suite (perdu, plus de réponse)" : "Contact classé sans suite (plus de réponse)" });
+  await analyserSuivi(suivi.id, maintenant);
+  return { classe };
+}
+
 /** Un message programmé annulé par Lucas (bulle « Prévu… » → Annuler). */
 export async function annulerMessage(id: string, maintenant: Date = new Date()) {
   const { message, suivi } = await messageDe(id);

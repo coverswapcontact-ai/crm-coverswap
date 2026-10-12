@@ -16,7 +16,7 @@ const CLIENTS: { nom: string; prenom: string | null; piece: Piece }[] = [
   { nom: "prénom fiable, cuisine", prenom: prenomFiable([{ prenom: "marie-claire", nom: "Exemple" }]), piece: pieceDe(["CUISINE"]) },
   { nom: "sans prénom, salle de bain", prenom: prenomFiable([{ prenom: "Inconnu", nom: "Exemple" }]), piece: pieceDe(["SDB"]) },
   { nom: "prénom en deux mots, mobilier", prenom: prenomFiable([{ prenom: "Jean Exemple", nom: "Exemple" }]), piece: pieceDe(["MEUBLES"]) },
-  { nom: "local professionnel", prenom: prenomFiable([{ prenom: "Élodie", nom: null }]), piece: pieceDe([], "PRO") },
+  { nom: "local professionnel", prenom: prenomFiable([{ prenom: "Élodie", nom: "Exemple" }]), piece: pieceDe([], "PRO") },
   { nom: "pièce inconnue", prenom: prenomFiable([{ prenom: "Yanis", nom: "Exemple" }]), piece: pieceDe([], null) },
 ];
 

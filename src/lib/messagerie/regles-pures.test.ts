@@ -158,14 +158,25 @@ describe("Mission 25 — zone (25 km de Pérols)", () => {
 });
 
 describe("Mission 25 — texte : prénom fiable, pièce, liens", () => {
-  test("prénom fiable : un vrai prénom, sinon « Bonjour, »", () => {
-    assert.equal(prenomFiable([{ prenom: "MARIE" }]), "Marie");
-    assert.equal(prenomFiable([{ prenom: "jean-pierre" }]), "Jean-Pierre");
-    assert.equal(prenomFiable([{ prenom: "Inconnu" }, { prenom: "Madame" }]), null);
-    assert.equal(prenomFiable([{ prenom: "Marie Dupont" }]), null, "deux mots : prénom et nom mêlés");
+  test("prénom fiable : un vrai prénom, séparé du nom, sinon « Bonjour, »", () => {
+    assert.equal(prenomFiable([{ prenom: "MARIE", nom: "Exemple" }]), "Marie");
+    assert.equal(prenomFiable([{ prenom: "jean-pierre", nom: "Exemple" }]), "Jean-Pierre");
+    assert.equal(prenomFiable([{ prenom: "Inconnu", nom: "Exemple" }, { prenom: "Madame", nom: "Exemple" }]), null);
+    assert.equal(prenomFiable([{ prenom: "Marie Dupont", nom: "Dupont" }]), null, "deux mots : prénom et nom mêlés");
     assert.equal(prenomFiable([{ prenom: "Durand", nom: "Durand" }]), null);
-    assert.equal(prenomFiable([{ prenom: "J" }]), null);
-    assert.equal(prenomFiable([{ prenom: null }, { prenom: "Léa" }]), "Léa");
+    assert.equal(prenomFiable([{ prenom: "J", nom: "Exemple" }]), null);
+    assert.equal(prenomFiable([{ prenom: null, nom: "Exemple" }, { prenom: "Léa", nom: "Exemple" }]), "Léa");
+    // Corrections du 12/10 : séparé du nom dans la fiche, ni nom de famille, ni pseudo, ni surnom ; des fiches d'accord.
+    assert.equal(prenomFiable([{ prenom: "MARIE" }]), null, "pas de nom dans la fiche : rien ne dit que c'est le prénom");
+    assert.equal(prenomFiable([{ prenom: "Loulou", nom: "Exemple" }]), null, "surnom");
+    assert.equal(prenomFiable([{ prenom: "Steph", nom: "Exemple" }]), null, "diminutif");
+    assert.equal(prenomFiable([{ prenom: "Exemple", nom: "Marie" }]), null, "nom de famille rangé à la place du prénom");
+    assert.equal(prenomFiable([{ prenom: "Marie", nom: "Exemple" }, { prenom: "Titi", nom: "" }]), null, "lead et fiche client aux noms différents");
+    assert.equal(prenomFiable([{ prenom: "Marie", nom: "Exemple" }], ["Paul Fiction"]), null, "dossier au nom d'un autre");
+    assert.equal(prenomFiable([{ prenom: "Marie", nom: "Exemple" }, { prenom: "Marie", nom: "Exemple" }], ["Mme Exemple", "Marie Exemple"]), "Marie", "mêmes noms partout");
+    assert.equal(prenomFiable([{ prenom: "Martin", nom: "Paul" }, { prenom: "Paul", nom: "Martin" }]), null, "prénom et nom inversés d'une fiche à l'autre : on ne sait pas");
+    assert.equal(prenomFiable([{ prenom: "élodie", nom: "Fiction" }]), "Élodie");
+    assert.equal(prenomFiable([{ prenom: "Marie-Loulou", nom: "Exemple" }]), null, "prénom composé : chaque partie reconnue");
   });
   test("pièce accordée, pièce inconnue", () => {
     const s2 = definitionMessage("S2").textes.defaut;
@@ -297,6 +308,47 @@ describe("Mission 25 — le planificateur", () => {
     assert.equal(momentParis(cc.voulu).jour, "2026-10-24");
     const perdu = etatDeBase({ dossier: dossier("PERDU", { perteLe: paris("2026-08-01", "10:00"), motifPerte: "PRIX" }), cible: { leadId: "l1", dossierId: "d1", clientId: null } });
     assert.deepEqual(apres(perdu, paris("2026-09-30", "10:00")).intentions.map((i) => i.code), ["R1"]);
+  });
+});
+
+describe("Corrections du 12/10 — un seul message par client, le plus avancé", () => {
+  const apres = (etat: EtatSuivi, quand: Date) => planifier(etat, null, quand);
+  const vieux = { id: "dv1", numero: "2026-047", totalHt: 2200, enLigneLe: paris("2026-09-30", "10:00"), premiereOuvertureLe: null, consultations: 0, consulteLe: null };
+  const base = { lead: null, dossier: dossier("DEVIS_ENVOYE"), devis: [vieux], cible: { leadId: null, dossierId: "d1", clientId: null } };
+  const connu = (id: string, code: string, statut: EtatSuivi["messages"][number]["statut"]) => ({ id, code, cle: `${code}:dv1`, statut, prevuLe: paris("2026-10-02", "10:00"), envoyeLe: statut === "ENVOYE" ? paris("2026-10-10", "10:00") : null, createdAt: paris("2026-10-02", "09:00"), ouvertLe: null, nonConfirmeLe: null, reponse: false, douceur: true });
+  const lundi = paris("2026-10-12", "10:00");
+
+  test("D2 et D4 voulus ensemble (devis de douze jours, jamais ouvert) : D4 seul", () => {
+    const plan = apres(etatDeBase(base), lundi);
+    assert.deepEqual(plan.intentions.map((i) => i.code), ["D4"]);
+    assert.equal(plan.aVenir?.code, "D5");
+  });
+  test("le devis a été ouvert : D3 passe devant D4", () => {
+    const ouvert = { ...vieux, consultations: 2, premiereOuvertureLe: paris("2026-10-02", "20:00"), consulteLe: paris("2026-10-02", "20:00") };
+    assert.deepEqual(apres(etatDeBase({ ...base, devis: [ouvert] }), lundi).intentions.map((i) => i.code), ["D3"]);
+  });
+  test("D2 déjà proposé, D4 arrive : D2 annulé, remplacé par D4", () => {
+    const plan = apres(etatDeBase({ ...base, messages: [connu("m1", "D2", "A_VALIDER")] }), lundi);
+    assert.deepEqual(plan.intentions.map((i) => i.code), ["D4"]);
+    assert.deepEqual(plan.annulations, [{ messageId: "m1", motif: "remplacé par D4 : un seul message à la fois" }]);
+  });
+  test("D4 parti : D2 n'est plus jamais préparé ; D4 annulé par Lucas : D2 non plus", () => {
+    const envoi = { le: paris("2026-10-10", "10:00"), code: "D4", canal: "SMS" as const, relance: true, etape: "DEVIS" as const };
+    assert.ok(!apres(etatDeBase({ ...base, messages: [connu("m2", "D4", "ENVOYE")], envois: [envoi] }), lundi).intentions.some((i) => i.code === "D2"));
+    assert.deepEqual(apres(etatDeBase({ ...base, messages: [{ ...connu("m3", "D4", "ANNULE"), motif: "annulé par toi" }] }), lundi).intentions, []);
+  });
+  test("D3 annulé parce que la situation a changé (le client a réagi) : D4 reste voulu", () => {
+    const ouvert = { ...vieux, consultations: 1, premiereOuvertureLe: paris("2026-10-02", "20:00"), consulteLe: paris("2026-10-02", "20:00") };
+    const d3 = { ...connu("m4", "D3", "ANNULE"), motif: "le devis a changé" };
+    const etat = etatDeBase({ ...base, devis: [ouvert], messages: [d3], dernierGesteClientLe: paris("2026-10-03", "09:00") });
+    assert.deepEqual(apres(etat, lundi).intentions.map((i) => i.code), ["D4"]);
+  });
+  test("la garde annule un message qu'un plus avancé de la même étape remplace", () => {
+    const etat = etatDeBase({ ...base, messages: [connu("m1", "D2", "PREVU"), connu("m2", "D4", "A_VALIDER")] });
+    const decision = garder(etat, { id: "m1", code: "D2", cle: "D2:dv1", canal: "SMS", prevuLe: lundi }, lundi);
+    assert.deepEqual(decision, { decision: "ANNULER", motif: "remplacé par D4 : un seul message à la fois" });
+    const autreDevis = garder(etat, { id: "m9", code: "D2", cle: "D2:dv2", canal: "SMS", prevuLe: lundi }, lundi);
+    assert.notEqual(autreDevis.decision, "ANNULER", "un autre devis : une autre étape");
   });
 });
 

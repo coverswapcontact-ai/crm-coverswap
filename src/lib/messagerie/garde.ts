@@ -2,6 +2,7 @@
  * Mission 25 — la garde de silence (cahier, § Le moteur de relances) : avant qu'un message préparé devienne « à
  * envoyer », le moteur vérifie ces situations ; une seule suffit pour le retenir. Pur.
  *
+ * - Une relance qu'une plus avancée de la même étape remplace est annulée (un seul message à la fois, unicite.ts).
  * - Les messages qui répondent à un geste du client (A1, S1, D6, D8, E1, E2, réponse proposée) passent la garde : seuls
  *   le STOP, la pause générale et la fenêtre de 8 h 30 à 21 h comptent.
  * - Les autres suivent les horaires de travail et les gardes dures : STOP, dossier perdu, en pause ou archivé (sauf R1
@@ -14,6 +15,7 @@
 import { definitionMessage, estCodeMessage, estReactif, type CodeMessage } from "./catalogue";
 import { dateAbsolue, dansLaFenetreDeReponse, dansLesHorairesDeTravail, heurePermise, instantParis, jourCourt, jourSuivant, momentParis } from "./horaires";
 import type { EtatSuivi } from "./types";
+import { plusAvanceConnu } from "./unicite";
 
 export type DecisionGarde =
   | { decision: "ENVOYER" }
@@ -40,6 +42,10 @@ export function garder(etat: EtatSuivi, message: MessageAGarder, maintenant: Dat
   const relance = definition?.nature === "RELANCE";
 
   if (etat.stop) return { decision: "ANNULER", motif: "STOP : plus aucun message à ce client" };
+
+  // Corrections du 12/10 : un seul message par étape ; une relance plus avancée (préparée, partie ou annulée) le remplace.
+  const plusAvance = plusAvanceConnu(message, etat.messages);
+  if (plusAvance) return { decision: "ANNULER", motif: `remplacé par ${plusAvance.code} : un seul message à la fois` };
 
   if (reactif) {
     if (dansLaFenetreDeReponse(maintenant)) return { decision: "ENVOYER" };

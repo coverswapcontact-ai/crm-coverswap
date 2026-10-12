@@ -172,6 +172,7 @@ export async function chargerEtat(suivi: SuiviLu, lancement: Date, maintenant: D
     ? await prisma.client.findUnique({
         where: { id: clientId },
         select: {
+          nom: true,
           prenom: true,
           nomFamille: true,
           telephones: { where: { archiveLe: null }, orderBy: { principal: "desc" }, select: { numero: true } },
@@ -313,7 +314,7 @@ export async function chargerEtat(suivi: SuiviLu, lancement: Date, maintenant: D
     lancement,
     cible: { leadId: lead?.id ?? suivi.leadId, dossierId: dossier?.id ?? null, clientId },
     nom: dossier?.clientNom || [lead?.prenom, lead?.nom].filter((x) => x && !/^inconnu$/i.test(x)).join(" ") || "Contact sans nom",
-    prenom: prenomFiable([{ prenom: client?.prenom, nom: client?.nomFamille }, { prenom: lead?.prenom, nom: lead?.nom }]),
+    prenom: prenomFiable([{ prenom: client?.prenom, nom: client?.nomFamille }, { prenom: lead?.prenom, nom: lead?.nom }], [client?.nom, dossier?.clientNom]),
     telephone,
     mobile: estMobileFrancais(telephone),
     email,
@@ -388,6 +389,7 @@ export async function chargerEtat(suivi: SuiviLu, lancement: Date, maintenant: D
         nonConfirmeLe: m.nonConfirmeLe,
         reponse: m.reponse,
         douceur: m.douceur,
+        motif: m.motif,
       })
     ),
     demarrageDoux: suivi.demarrageDoux,

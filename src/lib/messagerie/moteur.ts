@@ -12,12 +12,12 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireParametre } from "@/lib/parametres/service";
 import { mettreEnFile } from "@/lib/taches/file";
 import { prevenirLucas } from "./alertes";
-import { analyserSuivi, ecrireLigne } from "./analyse";
+import { analyserSuivi, ecrireLigne, PROPOSITIONS_DOUCES_PAR_JOUR } from "./analyse";
 import { chargerEtat } from "./etat";
-import { garder } from "./garde";
-import { dateAbsolue, instantParis, momentParis } from "./horaires";
+import { garder, type DecisionGarde } from "./garde";
+import { dateAbsolue, heurePermise, instantParis, jourSuivant, momentParis } from "./horaires";
 import { libelleDuCode } from "./redaction";
-import { DEBUT_CAMPAGNE, lancementMessagerie, suiviPour } from "./suivis";
+import { DEBUT_CAMPAGNE, enDouceur, lancementMessagerie, suiviPour } from "./suivis";
 import type { StatutMessage } from "./types";
 
 export const TYPE_ANALYSE = "MESSAGERIE_ANALYSE";
@@ -46,6 +46,10 @@ export async function demanderEcheance(le: Date): Promise<void> {
 /**
  * Les messages prévus dont l'heure est passée : garde de silence et horaires, puis « à envoyer » (avec alerte), décalés,
  * retenus ou annulés, chaque décision écrite au journal du suivi avec sa raison.
+ *
+ * Corrections du 12/10 : une proposition du démarrage en douceur devient « À valider » à son heure, garde passée, 8 par
+ * jour au plus et jamais plus de 8 en attente (toutes situations confondues) ; au-delà, elle passe au jour ouvré suivant.
+ * Un message ne devient pas « à envoyer » quand un autre attend déjà pour le même numéro (deux fiches, un client).
  */
 export async function traiterEcheances(maintenant: Date = new Date(), filtre: { suiviId?: string; sansAnalyse?: boolean } = {}): Promise<{ aEnvoyer: number; reportes: number; retenus: number; annules: number }> {
   const bilan = { aEnvoyer: 0, reportes: 0, retenus: 0, annules: 0 };
@@ -56,6 +60,9 @@ export async function traiterEcheances(maintenant: Date = new Date(), filtre: { 
     return bilan;
   }
   const lancement = await lancementMessagerie(maintenant);
+  const debutDuJour = instantParis(momentParis(maintenant).jour, 0);
+  let proposeesAujourdhui = await prisma.messagePrepare.count({ where: { ...AVEC_ARCHIVES, proposeLe: { gte: debutDuJour } } });
+  let enAttenteDeValidation = await prisma.messagePrepare.count({ where: { statut: "A_VALIDER" } });
   const parSuivi = new Map<string, typeof dus>();
   for (const m of dus) parSuivi.set(m.suiviId, [...(parSuivi.get(m.suiviId) ?? []), m]);
   for (const [suiviId, messages] of parSuivi) {
@@ -63,10 +70,28 @@ export async function traiterEcheances(maintenant: Date = new Date(), filtre: { 
     if (!suivi) continue;
     const { etat } = await chargerEtat(suivi, lancement, maintenant);
     for (const message of messages) {
-      const decision = garder(etat, message, maintenant);
+      let decision: DecisionGarde = garder(etat, message, maintenant);
       const libelle = libelleDuCode(message.code);
-      if (decision.decision === "ENVOYER") {
-        await prisma.messagePrepare.update({ where: { id: message.id }, data: { statut: "A_ENVOYER" } });
+      const proposition = message.douceur && enDouceur(suivi, lancement, maintenant);
+      if (decision.decision === "ENVOYER" && !message.reponse && suivi.telephone) {
+        // Un client, deux fiches (deux leads au même numéro) : un seul message à la fois pour ce numéro.
+        const autre = await prisma.messagePrepare.findFirst({ where: { suiviId: { not: suiviId }, statut: { in: ["A_ENVOYER", "A_VALIDER"] }, destinataire: message.destinataire ?? suivi.telephone }, select: { code: true } });
+        if (autre) decision = { decision: "REPORTER", jusqua: new Date(maintenant.getTime() + 3_600_000), motif: `un message (${autre.code}) attend déjà ta confirmation pour ce numéro` };
+      }
+      if (decision.decision === "ENVOYER" && proposition && (proposeesAujourdhui >= PROPOSITIONS_DOUCES_PAR_JOUR || enAttenteDeValidation >= PROPOSITIONS_DOUCES_PAR_JOUR)) {
+        const demain = heurePermise(instantParis(jourSuivant(momentParis(maintenant).jour), 9 * 60 + 30), "TRAVAIL", message.cle);
+        decision = { decision: "REPORTER", jusqua: demain, motif: `${PROPOSITIONS_DOUCES_PAR_JOUR} propositions par jour au plus` };
+      }
+      if (decision.decision === "ENVOYER" && proposition) {
+        await prisma.messagePrepare.update({ where: { id: message.id }, data: { statut: "A_VALIDER", proposeLe: maintenant } });
+        const connu = etat.messages.find((m) => m.id === message.id);
+        if (connu) connu.statut = "A_VALIDER";
+        await ecrireLigne(suiviId, { cle: `msg:${message.id}:propose`, le: maintenant, acteur: "IA", texte: `${libelle} proposé (démarrage en douceur) : à valider` });
+        proposeesAujourdhui++;
+        enAttenteDeValidation++;
+      } else if (decision.decision === "ENVOYER") {
+        // Une proposition préparée pendant le démarrage en douceur, dont l'heure vient après : un message ordinaire.
+        await prisma.messagePrepare.update({ where: { id: message.id }, data: { statut: "A_ENVOYER", ...(message.douceur ? { douceur: false } : {}) } });
         const connu = etat.messages.find((m) => m.id === message.id);
         if (connu) connu.statut = "A_ENVOYER";
         await ecrireLigne(suiviId, { cle: `msg:${message.id}:pret`, le: maintenant, acteur: "IA", texte: `${libelle} prêt à envoyer` });

@@ -4,6 +4,7 @@
  */
 import { avecMentionStop } from "@/lib/sms/texte";
 import { CATALOGUE_MESSAGES, definitionMessage, type CodeMessage, type VariableMessage, type VarianteMessage } from "./catalogue";
+import { estPrenomConnu, normaliserPrenom } from "./prenoms";
 
 /* ── Prénom fiable ──────────────────────────────────────────────────────────── */
 
@@ -21,21 +22,40 @@ function enCasse(mot: string): string {
     .join("");
 }
 
+/** Les mots d'un nom, minuscules sans accent, sans initiale ni mot de remplissage (« Mme », « Inconnu », « et »). */
+function motsDuNom(...parties: (string | null | undefined)[]): Set<string> {
+  const mots = parties
+    .join(" ")
+    .split(/[^\p{L}]+/u)
+    .map(normaliserPrenom)
+    .filter((m) => m.length >= 2 && m !== "et" && !PAS_UN_PRENOM.has(m));
+  return new Set(mots);
+}
+
+const inclus = (a: Set<string>, b: Set<string>) => [...a].every((m) => b.has(m));
+
 /**
- * Le prénom qu'on peut écrire au client, ou null. Fiable = écrit dans un champ « prénom » (fiche client, puis lead),
- * fait de lettres (traits d'union et apostrophes permis), de 2 à 20 caractères, ni un mot de remplissage (« Inconnu »,
- * « Madame », « Client »…), ni égal au nom de famille. Un champ de deux mots ou plus n'est pas fiable (prénom et nom
- * mêlés, ou formule) : « Bonjour, » tout court vaut mieux qu'un prénom faux.
+ * Le prénom qu'on peut écrire au client, ou null (« Bonjour, » tout court vaut mieux qu'un prénom faux). Corrections
+ * du 12/10, toutes requises :
+ * - la fiche sépare le prénom du nom : les deux champs remplis (fiche client, puis lead) ;
+ * - toutes les fiches parlent de la même personne : les mots de chaque nom connu (fiche client, lead, `autresNoms` :
+ *   nom affiché du client, nom du dossier) sont contenus les uns dans les autres — un lead et une fiche client aux noms
+ *   différents, pas de prénom ;
+ * - un seul mot (prénom composé à trait d'union permis), lettres seules, 2 à 20 caractères, ni mot de remplissage ;
+ * - pas un nom de famille (celui d'aucune fiche) ;
+ * - un prénom reconnu (prenoms.ts) : ni pseudo, ni surnom, ni nom de famille rangé à la place du prénom.
  */
-export function prenomFiable(candidats: { prenom?: string | null; nom?: string | null }[]): string | null {
+export function prenomFiable(candidats: { prenom?: string | null; nom?: string | null }[], autresNoms: (string | null | undefined)[] = []): string | null {
+  const identites = [...candidats.map((c) => motsDuNom(c.prenom, c.nom)), ...autresNoms.map((n) => motsDuNom(n))].filter((m) => m.size > 0);
+  for (let i = 0; i < identites.length; i++) for (let j = i + 1; j < identites.length; j++) if (!inclus(identites[i], identites[j]) && !inclus(identites[j], identites[i])) return null;
+  const nomsDeFamille = new Set(candidats.flatMap((c) => [...motsDuNom(c.nom)]));
   for (const { prenom, nom } of candidats) {
     const brut = (prenom ?? "").trim();
-    if (!brut) continue;
-    if (/\s/.test(brut)) continue;
-    if (!/^\p{L}[\p{L}'’-]{1,19}$/u.test(brut)) continue;
-    const bas = brut.toLowerCase();
-    if (PAS_UN_PRENOM.has(bas)) continue;
-    if (nom && bas === nom.trim().toLowerCase()) continue;
+    if (!brut || motsDuNom(nom).size === 0) continue;
+    if (!/^\p{L}[\p{L}-]{1,19}$/u.test(brut)) continue;
+    const bas = normaliserPrenom(brut);
+    if (PAS_UN_PRENOM.has(bas) || bas.split("-").some((m) => nomsDeFamille.has(m))) continue;
+    if (!estPrenomConnu(brut)) continue;
     return enCasse(brut);
   }
   return null;

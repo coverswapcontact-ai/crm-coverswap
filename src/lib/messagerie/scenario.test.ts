@@ -277,7 +277,7 @@ describe("Mission 25 — STOP, pause générale, démarrage en douceur, plafonds
     assert.ok((await messages(suivi.id)).some((m) => m.code === "A1"));
   });
 
-  test("dossier ouvert avant la mise en service : des propositions seulement, sans alerte", async () => {
+  test("dossier ouvert avant la mise en service : une proposition seulement (la plus avancée), sans alerte", async () => {
     const dossier = await prisma.dossier.create({
       data: { clientNom: "Léon Démo", clientAdresse: "1 rue de l'Essai", clientCp: "34970", clientVille: "Lattes", clientTelephone: "0639980021", objet: "Recouvrement de cuisine", source: "ENTRANT", etape: "DEVIS_ENVOYE", createdAt: new Date(Date.now() - 30 * JOUR) },
     });
@@ -288,8 +288,9 @@ describe("Mission 25 — STOP, pause générale, démarrage en douceur, plafonds
     const avant = recues.length;
     await analyse.analyserSuivi(suivi.id, horloge);
     const proposes = await messages(suivi.id);
-    assert.ok(proposes.length >= 1, "une relance de devis proposée");
-    assert.ok(proposes.every((m) => m.statut === "A_VALIDER" && m.douceur));
+    // Corrections du 12/10 : D2 et D4 voulus ensemble (devis de douze jours, jamais ouvert) → D4 seul, à valider.
+    assert.deepEqual(proposes.map((m) => m.code), ["D4"], "une seule relance de devis proposée : la plus avancée");
+    assert.ok(proposes.every((m) => m.statut === "A_VALIDER" && m.douceur && m.proposeLe));
     await moteur.notifierPrets(new Date(horloge.getTime() + 20 * 60_000));
     assert.ok(!recues.slice(avant).some((a) => a.titre.includes("Léon")), "pas d'alerte pour une proposition");
     await gestes.validerProposition(proposes[0].id, horloge);

@@ -10,10 +10,10 @@ import { estMotifRepondre } from "@/lib/dossiers/main";
 import { lireParametre } from "@/lib/parametres/service";
 import { definitionMessage, estCodeMessage, type CodeMessage } from "./catalogue";
 import { texteCite } from "./etat";
-import { instantParis, jourSuivant, momentParis } from "./horaires";
+import { instantParis, jourCourt, jourSuivant, momentParis } from "./horaires";
 import { libelleDuCode } from "./redaction";
 import { DEBUT_CAMPAGNE } from "./suivis";
-import { lireFaits, lireOuEnEst, type OuEnEst } from "./types";
+import { lireFaits, lireOuEnEst, PROPOSITIONS_PAR_JOUR, type OuEnEst } from "./types";
 import { avecMentionStop } from "@/lib/sms/texte";
 
 export const FILTRES_CONVERSATIONS = ["TOUS", "NON_LUS", "A_ENVOYER", "A_TOI", "ATTENTE_CLIENT", "ARCHIVES"] as const;
@@ -362,86 +362,131 @@ export type CarteUnParUn = {
   raison: string;
   dossierId: string | null;
   leadId: string | null;
+  /** Corrections du 12/10 : la carte propose de classer le client (« Sans suite », ou « Perdu » après D5). */
+  classer?: "SANS_SUITE" | "PERDU" | null;
 };
+
+/** Un rappel passé depuis plus de 7 jours sort des appels : il est proposé « Sans suite » (corrections du 12/10). */
+export const JOURS_RAPPEL_SANS_SUITE = 7;
 
 /**
  * La file du jour, dans l'ordre du cahier : les réponses des clients à traiter, puis les messages dont l'heure est
  * passée (ceux d'hier non confirmés en tête), puis les appels à passer, puis les propositions à valider.
+ *
+ * Corrections du 12/10 : une seule carte par client (par suivi, et par numéro : deux fiches, un client) ; pas d'appel
+ * pour un dossier perdu, ni pour un client qui a déjà un message dans la file (sa carte est ce message) ; un rappel
+ * passé depuis plus de 7 jours devient une proposition « Sans suite » ; 8 propositions au plus, toutes situations
+ * confondues (messages à valider, passages d'étape, « Sans suite »).
  */
 export async function fileDuJour(maintenant: Date = new Date()): Promise<{ cartes: CarteUnParUn[]; compteurs: Record<CarteUnParUn["genre"], number>; pause: boolean }> {
   const pause = (await lireParametre("MESSAGERIE_PAUSE", maintenant)) === "EN_PAUSE";
-  const ouvertsTous = await prisma.messagePrepare.findMany({ where: { statut: { in: ["A_ENVOYER", "A_VALIDER"] } }, select: { suiviId: true } });
-  const premiers = await premiersSms(ouvertsTous.map((m) => m.suiviId));
   const finDuJour = instantParis(jourSuivant(momentParis(maintenant).jour), 0);
+  const limiteRappel = new Date(maintenant.getTime() - JOURS_RAPPEL_SANS_SUITE * 86_400_000);
   const ouverts = await prisma.messagePrepare.findMany({ where: { statut: { in: ["A_ENVOYER", "A_VALIDER"] } }, orderBy: [{ prevuLe: "asc" }] });
+  const premiers = await premiersSms(ouverts.map((m) => m.suiviId));
   const suivis = await prisma.suivi.findMany({ where: { archiveLe: null } });
   const suiviDe = new Map(suivis.map((s) => [s.id, s]));
+  const suiviDuLead = new Map(suivis.filter((s) => s.leadId).map((s) => [s.leadId!, s]));
+  const suiviDuDossier = new Map(suivis.filter((s) => s.dossierId).map((s) => [s.dossierId!, s]));
+  // Fermés : dossier perdu ou archivé, lead perdu ou archivé (sans dossier). Jamais d'appel ni de proposition pour eux.
+  const [dossiersFermes, leadsFermes] = await Promise.all([
+    prisma.dossier.findMany({ where: { ...AVEC_ARCHIVES, id: { in: [...suiviDuDossier.keys()] }, OR: [{ etape: "PERDU" }, { archiveLe: { not: null } }] }, select: { id: true } }),
+    prisma.lead.findMany({ where: { ...AVEC_ARCHIVES, id: { in: suivis.filter((s) => s.leadId && !s.dossierId).map((s) => s.leadId!) }, OR: [{ statut: "PERDU" }, { archiveLe: { not: null } }] }, select: { id: true } }),
+  ]);
+  const fermes = new Set<string>([...dossiersFermes.map((d) => suiviDuDossier.get(d.id)?.id), ...leadsFermes.map((l) => suiviDuLead.get(l.id)?.id)].filter((x): x is string => Boolean(x)));
+  const avecMessage = new Set(ouverts.map((m) => m.suiviId));
+
   const cartes: CarteUnParUn[] = [];
-  const dejaPris = new Set<string>();
+  const suivisPris = new Set<string>();
+  const numerosPris = new Set<string>();
   const base = (s: (typeof suivis)[number]) => ({ suiviId: s.id, nom: s.nom, telephone: s.telephone, ouEnEst: lireOuEnEst(s.ouEnEst), dossierId: s.dossierId, leadId: s.leadId });
+  /** Une carte par client : un suivi, ou un numéro, qui a déjà sa carte n'en reçoit pas d'autre. */
+  const ajouter = (carte: CarteUnParUn): boolean => {
+    if (suivisPris.has(carte.suiviId) || (carte.telephone && numerosPris.has(carte.telephone))) return false;
+    cartes.push(carte);
+    suivisPris.add(carte.suiviId);
+    if (carte.telephone) numerosPris.add(carte.telephone);
+    return true;
+  };
 
   // 1. Réponses des clients à traiter : une réponse proposée, ou un client qui attend une réponse.
-  const reponses = ouverts.filter((m) => m.statut === "A_ENVOYER" && m.cle.startsWith("REPONSE:"));
-  for (const m of reponses) {
+  for (const m of ouverts.filter((x) => x.statut === "A_ENVOYER" && x.cle.startsWith("REPONSE:"))) {
     const s = suiviDe.get(m.suiviId);
-    if (!s) continue;
+    if (!s || suivisPris.has(s.id)) continue;
     const dernier = await dernierMessageClient(s.id, s.dossierId, s.leadId, s.telephone);
-    cartes.push({ cle: `msg:${m.id}`, genre: "REPONSE", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: dernier, raison: m.raison ?? "Réponse proposée" });
-    dejaPris.add(m.id);
+    ajouter({ cle: `msg:${m.id}`, genre: "REPONSE", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: dernier, raison: m.raison ?? "Réponse proposée" });
   }
   const dossiersARepondre = await prisma.dossier.findMany({ where: { archiveLe: null, main: "MOI", mainMotif: { startsWith: "Répondre" } }, select: { id: true } });
   for (const d of dossiersARepondre) {
-    const s = suivis.find((x) => x.dossierId === d.id);
-    if (!s || cartes.some((c) => c.suiviId === s.id)) continue;
+    const s = suiviDuDossier.get(d.id);
+    if (!s || suivisPris.has(s.id)) continue;
     const dernier = await dernierMessageClient(s.id, s.dossierId, s.leadId, s.telephone);
-    cartes.push({ cle: `repondre:${s.id}`, genre: "REPONSE", ...base(s), message: null, dernierMessageClient: dernier, raison: "Le client attend ta réponse" });
+    ajouter({ cle: `repondre:${s.id}`, genre: "REPONSE", ...base(s), message: null, dernierMessageClient: dernier, raison: "Le client attend ta réponse" });
   }
 
   // 2. Les messages dont l'heure est passée (non confirmés d'hier en tête).
   const dus = ouverts
-    .filter((m) => m.statut === "A_ENVOYER" && !dejaPris.has(m.id))
+    .filter((m) => m.statut === "A_ENVOYER" && !m.cle.startsWith("REPONSE:"))
     .sort((a, b) => Number(Boolean(b.nonConfirmeLe)) - Number(Boolean(a.nonConfirmeLe)) || a.prevuLe.getTime() - b.prevuLe.getTime());
   for (const m of dus) {
     const s = suiviDe.get(m.suiviId);
     if (!s) continue;
-    cartes.push({ cle: `msg:${m.id}`, genre: "MESSAGE", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: null, raison: m.nonConfirmeLe ? "Pas confirmé hier : l'avais-tu envoyé ?" : m.raison ?? "" });
+    ajouter({ cle: `msg:${m.id}`, genre: "MESSAGE", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: null, raison: m.nonConfirmeLe ? "Pas confirmé hier : l'avais-tu envoyé ?" : m.raison ?? "" });
   }
 
-  // 3. Les appels à passer : leads de la campagne jamais appelés, rappels du jour, suite « l'appeler ».
+  // 3. Les appels à passer : leads de la campagne jamais appelés, rappels de moins de 7 jours, suite « l'appeler ».
+  //    Un rappel plus ancien est proposé « Sans suite » (4) ; un dossier perdu, un client qui a un message dans la file
+  //    (sa carte est ce message) ou qui a dit STOP n'ont pas de carte d'appel.
   const leadsAAppeler = await prisma.lead.findMany({ where: { archiveLe: null, createdAt: { gte: DEBUT_CAMPAGNE }, dernierAppelLe: null, statut: { not: "PERDU" }, dossiers: { none: {} } }, select: { id: true }, orderBy: { createdAt: "asc" } });
-  const rappelsLeads = await prisma.lead.findMany({ where: { archiveLe: null, rappelLe: { lt: finDuJour }, statut: { not: "PERDU" } }, select: { id: true } });
-  const rappelsDossiers = await prisma.dossier.findMany({ where: { archiveLe: null, prochaineAction: { startsWith: "Rappeler" }, prochaineActionDate: { lt: finDuJour } }, select: { id: true } });
+  const rappelsLeads = await prisma.lead.findMany({ where: { archiveLe: null, rappelLe: { lt: finDuJour }, statut: { not: "PERDU" } }, select: { id: true, rappelLe: true }, orderBy: { rappelLe: "asc" } });
+  const rappelsDossiers = await prisma.dossier.findMany({ where: { archiveLe: null, etape: { not: "PERDU" }, prochaineAction: { startsWith: "Rappeler" }, prochaineActionDate: { lt: finDuJour } }, select: { id: true, prochaineActionDate: true }, orderBy: { prochaineActionDate: "asc" } });
+  const sansSuite = new Map<string, Date>();
   const aAppeler = new Set<string>();
-  for (const l of [...leadsAAppeler, ...rappelsLeads]) {
-    const s = suivis.find((x) => x.leadId === l.id);
-    if (s) aAppeler.add(s.id);
+  const rappel = (s: (typeof suivis)[number] | undefined, le: Date | null) => {
+    if (!s) return;
+    if (le && le.getTime() < limiteRappel.getTime()) {
+      if (!sansSuite.has(s.id)) sansSuite.set(s.id, le);
+    } else aAppeler.add(s.id);
+  };
+  for (const l of rappelsLeads) rappel(suiviDuLead.get(l.id), l.rappelLe);
+  for (const d of rappelsDossiers) rappel(suiviDuDossier.get(d.id), d.prochaineActionDate);
+  for (const l of leadsAAppeler) {
+    const s = suiviDuLead.get(l.id);
+    if (s && !sansSuite.has(s.id)) aAppeler.add(s.id);
   }
-  for (const d of rappelsDossiers) {
-    const s = suivis.find((x) => x.dossierId === d.id);
-    if (s) aAppeler.add(s.id);
-  }
-  for (const s of suivis) if (/^l'appeler/.test(s.prochaineAction ?? "")) aAppeler.add(s.id);
+  for (const s of suivis) if (/^l'appeler/.test(s.prochaineAction ?? "") && !sansSuite.has(s.id)) aAppeler.add(s.id);
   for (const id of aAppeler) {
     const s = suiviDe.get(id);
-    if (!s || s.stopLe || cartes.some((c) => c.suiviId === id)) continue;
-    cartes.push({ cle: `appel:${id}`, genre: "APPEL", ...base(s), message: null, dernierMessageClient: null, raison: s.prochaineAction ?? "À appeler" });
+    if (!s || s.stopLe || fermes.has(id) || avecMessage.has(id) || sansSuite.has(id)) continue;
+    ajouter({ cle: `appel:${id}`, genre: "APPEL", ...base(s), message: null, dernierMessageClient: null, raison: s.prochaineAction ?? "À appeler" });
   }
 
-  // 4. Les propositions à valider : démarrage en douceur, et passages d'étape proposés (perdu, sans suite).
+  // 4. Les propositions à valider, 8 au plus : démarrage en douceur, passages d'étape proposés, rappels sans suite.
+  let propositions = 0;
+  const proposer = (carte: CarteUnParUn) => {
+    if (propositions >= PROPOSITIONS_PAR_JOUR) return;
+    if (ajouter(carte)) propositions++;
+  };
   for (const m of ouverts.filter((x) => x.statut === "A_VALIDER")) {
     const s = suiviDe.get(m.suiviId);
-    if (!s) continue;
-    cartes.push({ cle: `msg:${m.id}`, genre: "PROPOSITION", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: null, raison: m.raison ?? "Proposition" });
+    if (!s || fermes.has(s.id)) continue;
+    proposer({ cle: `msg:${m.id}`, genre: "PROPOSITION", ...base(s), message: vueDuMessage(m, premiers.has(m.suiviId)), dernierMessageClient: null, raison: m.raison ?? "Proposition" });
   }
   for (const s of suivis.filter((x) => /^décider/.test(x.prochaineAction ?? ""))) {
-    if (cartes.some((c) => c.suiviId === s.id && c.genre === "PROPOSITION")) continue;
-    cartes.push({ cle: `etape:${s.id}`, genre: "PROPOSITION", ...base(s), message: null, dernierMessageClient: null, raison: s.prochaineAction ?? "" });
+    if (fermes.has(s.id)) continue;
+    proposer({ cle: `etape:${s.id}`, genre: "PROPOSITION", ...base(s), message: null, dernierMessageClient: null, raison: s.prochaineAction ?? "", classer: /perdu/i.test(s.prochaineAction ?? "") ? "PERDU" : "SANS_SUITE" });
   }
+  for (const [id, le] of sansSuite) {
+    const s = suiviDe.get(id);
+    if (!s || s.stopLe || fermes.has(id) || avecMessage.has(id)) continue;
+    proposer({ cle: `sans-suite:${id}`, genre: "PROPOSITION", ...base(s), message: null, dernierMessageClient: null, raison: `Rappel prévu le ${jourCourt(le)}, sans nouvelles depuis : le classer « Sans suite » ?`, classer: "SANS_SUITE" });
+  }
+
   const compteurs = { REPONSE: 0, MESSAGE: 0, APPEL: 0, PROPOSITION: 0 };
   for (const c of cartes) compteurs[c.genre]++;
-  const avecMessage = cartes.filter((c) => c.message);
-  const illustres = await avecImages(avecMessage.map((c) => c.message!));
-  avecMessage.forEach((c, i) => (c.message = illustres[i]));
+  const avecTexte = cartes.filter((c) => c.message);
+  const illustres = await avecImages(avecTexte.map((c) => c.message!));
+  avecTexte.forEach((c, i) => (c.message = illustres[i]));
   return { cartes, compteurs, pause };
 }
 

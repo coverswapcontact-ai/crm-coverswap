@@ -6,6 +6,9 @@
  * Ce qu'il ne fait pas : les horaires, la garde de silence, les plafonds (garde.ts, moteur.ts) ; les réponses aux
  * messages du client, E3 et les réponses rapides (analyse.ts, gestes.ts : ils naissent d'un geste, pas d'un état).
  *
+ * Un seul message par client (corrections du 12/10) : les relances d'une même étape se remplacent, la plus avancée
+ * reste (unicite.ts) ; entre deux étapes, la garde fait attendre le second.
+ *
  * Les messages qui suivent un fait daté (A1, A2, P1, S1, S2, D1, D6, D8, C1, C3…) ne naissent que d'un fait postérieur
  * au lancement de la messagerie : rien n'est envoyé pour un devis mis en ligne la semaine d'avant. Les relances de
  * silence, elles, valent pour tous les dossiers ouverts (démarrage en douceur : moteur.ts).
@@ -13,6 +16,7 @@
 import { definitionMessage, type CodeMessage, type VarianteMessage } from "./catalogue";
 import { instantParis, jourSuivant, momentParis, veilleA18h } from "./horaires";
 import type { Annulation, EnvoiLu, EtatSuivi, Intention, MessageConnu } from "./types";
+import { plusAvanceConnu, unSeulParEtape } from "./unicite";
 
 const MINUTE = 60_000;
 const JOUR = 86_400_000;
@@ -239,14 +243,23 @@ export function planifier(etat: EtatSuivi, precedent: { dateChantier?: string | 
   const retenues = voulues.filter((i) => !(tardives.has(i.code) && maintenant.getTime() - i.voulu.getTime() > RETARD_MAX_JOURS * JOUR));
   // Déjà fait par une autre trace (SMS copié, mail de relance) : pas deux fois le même code au même client.
   const nouvelles = retenues.filter((i) => !messageDe(etat, i.cle) && !(definitionMessage(i.code as CodeMessage).nature !== "REACTIF" && envoiDe(etat, i.code) && ["A1", "A2", "A4", "A5", "P1", "P2", "P3", "S1", "C3", "C4", "C5", "F1", "R1", "R2"].includes(i.code)));
-  const prochaines = nouvelles.filter((i) => i.voulu.getTime() <= maintenant.getTime() + HORIZON_MS);
-  const aVenir = nouvelles.filter((i) => i.voulu.getTime() > maintenant.getTime() + HORIZON_MS).sort((a, b) => a.voulu.getTime() - b.voulu.getTime())[0] ?? null;
+  // Corrections du 12/10 — un seul message par client : une relance dépassée dans son étape (une plus avancée existe,
+  // partie, ouverte ou annulée) n'est plus préparée ; parmi celles voulues maintenant, la plus avancée de chaque étape
+  // reste (D4 avant D2, D3 avant D4), les autres ne sont pas préparées (unicite.ts).
+  const nonDepassees = nouvelles.filter((i) => !plusAvanceConnu(i, etat.messages));
+  const { gardees: prochaines, remplaces } = unSeulParEtape(
+    nonDepassees.filter((i) => i.voulu.getTime() <= maintenant.getTime() + HORIZON_MS),
+    etat.messages
+  );
+  const aVenir = nonDepassees.filter((i) => i.voulu.getTime() > maintenant.getTime() + HORIZON_MS).sort((a, b) => a.voulu.getTime() - b.voulu.getTime())[0] ?? null;
 
   // Les messages ouverts qui ne sont plus voulus : annulés, avec la raison.
   const cles = new Set(retenues.map((i) => i.cle));
   const annulations: Annulation[] = etat.messages
     .filter((m) => ["PREVU", "A_ENVOYER", "A_VALIDER"].includes(m.statut) && (CODES_PLANIFIES as readonly string[]).includes(m.code) && !cles.has(m.cle))
     .map((m) => ({ messageId: m.id, motif: motifObsolete(m.code, etat, ferme) }));
+  // Ceux qu'une relance plus avancée de la même étape remplace : annulés (« garde le plus avancé, annule l'autre »).
+  for (const r of remplaces) if (!annulations.some((a) => a.messageId === r.messageId)) annulations.push({ messageId: r.messageId, motif: `remplacé par ${r.par} : un seul message à la fois` });
 
   return { intentions: prochaines, annulations, aVenir, proposition: ferme ? null : proposition, aAppeler: ferme ? null : aAppeler };
 }

@@ -243,13 +243,15 @@ describe("résultats par campagne et par publicité", () => {
   test("l'écran Publicité regroupe les leads par campagne puis par publicité", async () => {
     // Un lead archivé (essai, mis de côté) ne compte pas dans le jugement d'une campagne.
     await prisma.metaLead.update({ where: { leadgenId: "556677889900999" }, data: { archiveLe: new Date(), archiveMotif: "essai" } });
-    const resultats = await sante.resultatsMeta(21);
+    // La fenêtre couvre le lead d'essai du 20/09 quel que soit le jour où l'essai tourne (21 jours fixes : faux dès le 11/10).
+    const jours = Math.max(21, Math.ceil((Date.now() - Date.parse("2026-09-20T09:12:00Z")) / 86_400_000) + 1);
+    const resultats = await sante.resultatsMeta(jours);
     const campagne = resultats.parCampagne.find((c) => c.nom === "Cuisines — septembre");
     assert.ok(campagne, "la campagne doit apparaître");
     assert.equal(campagne!.leads, 2, "trois leads reçus, un archivé : deux comptés");
     const publicite = resultats.parPublicite.find((p) => p.nom === "Avant/après cuisine chêne");
     assert.equal(publicite?.leads, 2);
-    assert.equal(resultats.jours, 21);
+    assert.equal(resultats.jours, jours);
 
     // Et il ne réclame plus de notification non plus : un essai mis de côté
     // ne doit pas rester en rouge dans l'écran Publicité.

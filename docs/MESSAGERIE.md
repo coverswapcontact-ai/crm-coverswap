@@ -17,7 +17,7 @@ qu'une chose : les messages réglés Auto partiront seuls par le téléphone And
 |---|---|
 | `Suivi` | un par dossier, ou par lead tant qu'il n'a pas de dossier (le suivi passe au dossier quand il arrive : mêmes faits, même journal, mêmes messages) ; faits, « Où on en est » (+ correction de Lucas), prochaine action, pause, STOP, démarrage en douceur, lu / non lu, archivage de la conversation, `revoirLe` (prochain passage du moteur) |
 | `LigneJournalSuivi` | une ligne datée par événement (Client, Toi, IA, CRM), clé unique : rejouer n'écrit rien de plus |
-| `MessagePrepare` | un message préparé : code de la liste, clé unique (`A1:lead:…`, `D2:<devis>`, `S2:<simulation>`, `C1:suivi:…:<date>`, `REPONSE:<message du client>`…), canal, texte (personnalisé et contrôlé) et texte validé, heure prévue, statut (PREVU, A_ENVOYER, A_VALIDER, ENVOYE, NON_ENVOYE, RETENU, ANNULE), mode Android (AUTO, VALIDATION, DESACTIVE) |
+| `MessagePrepare` | un message préparé : code de la liste, clé unique (`A1:lead:…`, `D2:<devis>`, `S2:<simulation>`, `C1:suivi:…:<date>`, `REPONSE:<message du client>`…), canal, texte (personnalisé et contrôlé) et texte validé, heure prévue, statut (PREVU, A_ENVOYER, A_VALIDER, ENVOYE, NON_ENVOYE, RETENU, ANNULE), mode Android (AUTO, VALIDATION, DESACTIVE), `proposeLe` (passé « À valider » ce jour-là : 8 par jour, corrections du 12/10) |
 | `ModeleSms.mode` | le mode réglé par Lucas pour un code (Paramètres → SMS) ; le texte modifié vit dans `ModeleSms.texte` (code `P3`, ou `P3.proche` pour une variante) |
 
 Paramètres (groupe « Messagerie et relances ») : `MESSAGERIE_MODE_ENVOI` (Manuel par défaut), `MESSAGERIE_PAUSE`
@@ -51,9 +51,10 @@ groupe IA : `IA_MESSAGERIE` (interrupteur), `IA_MESSAGERIE_BUDGET` (10 € sans 
 | 4 Liste fermée, modes | `catalogue.ts` (41 entrées : 32 + CC + 8 Q), `redaction.ts › lireSurcharges` |
 | 5 Le silence gagne | `garde.ts` |
 | 7, 8 Un message un objectif ; jamais de prix ni de date inventés | `controleur.ts` (textes de l'IA seulement ; les textes de la liste sont validés) |
-| 9 Présentation et prénom | `catalogue.ts` (seul A1 se présente), `texte.ts › prenomFiable` |
+| 9 Présentation et prénom | `catalogue.ts` (seul A1 se présente), `texte.ts › prenomFiable` et `prenoms.ts` (prénoms reconnus) |
 | 10 Le lien proposé, jamais imposé | P2 sans lien sauf après P1 ; S2 « SMS d'abord » avec l'image |
-| 11 Horaires, fériés, pression | `horaires.ts`, `garde.ts` (48 h, trois par étape), `analyse.ts` (40 par jour, 8 propositions douces) |
+| 11 Horaires, fériés, pression | `horaires.ts`, `garde.ts` (48 h, trois par étape), `analyse.ts` (40 par jour), `moteur.ts` (8 propositions par jour) |
+| Un seul message par client (12/10) | `unicite.ts` (le plus avancé de chaque étape), `planificateur.ts`, `garde.ts`, `vues.ts › fileDuJour` (une carte par client) |
 | 12 Tout est tracé | `LigneJournalSuivi` (préparé, prêt, décalé, retenu, annulé, envoyé, non envoyé) |
 
 ## 5. Décisions prises seul (le cahier ne tranchait pas)
@@ -130,7 +131,50 @@ groupe IA : `IA_MESSAGERIE` (interrupteur), `IA_MESSAGERIE_BUDGET` (10 € sans 
   « la file du jour juste sur 5 vrais dossiers » et « 20 événements réels rejoués » se font par la recette (points 7
   et 8) et par le rejeu à blanc de la Messagerie (règles : gratuit ; IA : après sa mise en route).
 
-## 6. Lots 8 et 9 : ce qui reste
+## 6. Corrections du 12/10 (après la première file du jour)
+
+Consigne de Lucas du 12/10, en quatre points ; ce qui a été décidé pour chacun.
+
+1. **Un seul message préparé par client à la fois** (`unicite.ts`). Les relances d'une même étape se remplacent :
+   même devis (D2, D4, D3, D5), même lot de simulations (S3, S4, S5), mêmes appels manqués (A2, A4, A5), photos
+   (P2, P3), avis (C4, C5), réactivation (R1, R2). Rang dans l'étape : D2 < D4 < D3 < D5 (D3 n'existe que si le devis a
+   été ouvert : il passe devant D4, comme demandé), les autres dans l'ordre de leur numéro. Quand plusieurs sont voulues
+   ensemble (relances en retard au démarrage), la plus avancée est préparée, les autres non ; un message déjà écrit
+   qu'une plus avancée remplace est **annulé** (« remplacé par D4 : un seul message à la fois »), et une relance moins
+   avancée qu'une relance déjà connue de l'étape (partie, ouverte, ou annulée par Lucas) n'est plus jamais préparée.
+   Entre deux étapes différentes (un appel manqué et une relance de photos), rien n'est annulé : la garde fait attendre
+   le second tant que le premier attend Lucas (« un message attend déjà ta confirmation »). Deux fiches au même numéro
+   (deux leads d'un même client) : un seul message dans la file pour ce numéro. Quand le client écrit, une relance déjà
+   dans la file repasse « prévue » (sa réponse d'abord ; la garde la décale ensuite de deux jours) : remise en attente,
+   pas annulée, pour ne pas couper la suite (P3 ne part qu'après P2).
+2. **Prénom fiable** (`texte.ts › prenomFiable`, `prenoms.ts`). Toutes ces conditions, sinon « Bonjour, » : la fiche
+   sépare le prénom du nom (les deux champs remplis) ; toutes les fiches connues parlent de la même personne (les mots
+   du nom de la fiche client, du lead, du nom affiché et du nom du dossier sont contenus les uns dans les autres) ; un
+   seul mot (trait d'union permis) ; pas un nom de famille d'aucune fiche ; un prénom reconnu. La liste des prénoms
+   reconnus est embarquée (≈ 1 250 prénoms courants en France, maghrébins, portugais, espagnols, italiens, d'Afrique de
+   l'Ouest, sans diminutifs) : un surnom, un pseudo ou un nom de famille rangé dans le champ prénom n'y est pas. Un vrai
+   prénom absent de la liste donne « Bonjour, » : l'erreur sans conséquence ; on peut l'ajouter à la liste.
+3. **« Appels à passer »** (`vues.ts › fileDuJour`) : plus de dossier perdu ou archivé, ni de lead perdu ; plus de
+   client qui a déjà un message dans la file (sa carte est ce message : « À valider » ou « à envoyer ») ; un rappel
+   passé depuis plus de 7 jours sort des appels et devient une proposition « Rappel prévu le …, sans nouvelles depuis :
+   le classer « Sans suite » ? ». Le bouton « Classer sans suite » (mode « Un par un », `classerSansSuite`, action
+   `sans-suite` de `/api/messagerie/conversations/[suiviId]`) passe un lead Perdu (« plus de réponse ») ou un dossier en
+   Perdu par la fonction de l'écran ; rien n'est classé sans ce geste. Les cartes « décider » (trois appels et trois
+   messages sans réponse, D5 sans nouvelles) ont le même bouton. Une seule carte par client dans toute la file (par
+   suivi et par numéro).
+4. **Démarrage en douceur : 8 propositions par jour au plus, toutes situations confondues.** Une proposition naît
+   « prévue » comme un message ordinaire ; à son heure, elle passe la garde (elle ne la contournait plus) et devient
+   « À valider » seulement si moins de 8 ont été proposées aujourd'hui et moins de 8 attendent ; sinon elle passe au
+   jour ouvré suivant (« 8 propositions par jour au plus »). La file montre 8 propositions au plus (messages à valider,
+   puis passages d'étape, puis « Sans suite »). Les propositions ne comptent plus dans les 40 messages par jour. Une
+   proposition dont l'heure vient après les 14 jours devient un message ordinaire.
+
+**Données de production** : la migration `messagerie-corrections-12-10` (au démarrage, rejouable) applique ces règles
+aux messages déjà préparés : doublons d'étape annulés (le plus avancé reste), « Bonjour X, » corrigé dans les messages
+encore ouverts, une carte par client et 8 propositions au plus (le reste repasse « prévu » et revient à son tour). Rien
+n'est envoyé, aucun dossier ni lead n'est classé.
+
+## 7. Lots 8 et 9 : ce qui reste
 
 **Lot 8 — passerelle Android.** Prérequis : le forfait de l'Android autorise les envois automatisés (sinon OVH avec un
 autre numéro, cahier § Android). Côté code :

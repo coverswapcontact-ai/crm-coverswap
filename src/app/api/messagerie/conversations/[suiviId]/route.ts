@@ -10,6 +10,7 @@ import {
   apresAppel,
   archiverConversation,
   arreterLesSms,
+  classerSansSuite,
   corrigerOuEnEst,
   lienDeLEspace,
   marquerLu,
@@ -64,6 +65,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("pause"), jusquau: z.iso.datetime("Date invalide."), motif: z.string().trim().max(80).optional() }),
   z.object({ action: z.literal("reprendre") }),
   z.object({ action: z.literal("stop") }),
+  z.object({ action: z.literal("sans-suite") }),
   z.object({ action: z.literal("note"), texte: z.string("La note est vide.").trim().min(2, "La note est vide.").max(4000) }),
   z.object({ action: z.literal("libre"), texte: z.string().trim().max(1600).optional(), code: z.string().max(4).optional(), canal: z.enum(["SMS", "MAIL", "ESPACE"]).optional() }),
   z.object({ action: z.literal("rappel"), le: z.iso.datetime("Date invalide."), prevenir: z.boolean().default(false) }),
@@ -116,6 +118,8 @@ export async function POST(requete: NextRequest, { params }: { params: Promise<{
       case "stop":
         await arreterLesSms(suiviId);
         return NextResponse.json({ ok: true });
+      case "sans-suite":
+        return NextResponse.json(await classerSansSuite(suiviId));
       case "note": {
         const r = await ajouterNote({ suiviId, texte: entree.texte });
         const cree = r.crees.length ? await prisma.messagePrepare.findFirst({ where: { id: { in: r.crees } }, orderBy: { createdAt: "asc" } }) : null;

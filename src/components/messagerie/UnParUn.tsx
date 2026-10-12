@@ -14,6 +14,7 @@ import { LignesOuEnEst } from "./OuEnEst";
  * Mission 25 — le mode « Un par un » : une carte à la fois, dans l'ordre (réponses des clients, messages dont l'heure
  * est passée, appels à passer, propositions à valider). Chaque carte : le nom, « Où on en est », l'action, trois
  * boutons au plus. Quand la file est vide, l'écran le dit. Lucas n'a jamais à décider par où commencer.
+ * Corrections du 12/10 : une carte « Sans suite » (rappel passé depuis plus de 7 jours) se classe d'un appui.
  */
 
 type File = { cartes: CarteUnParUn[]; compteurs: Record<CarteUnParUn["genre"], number>; pause: boolean };
@@ -37,9 +38,23 @@ export function UnParUn({ onFermer, onOuvrirConversation }: { onFermer: () => vo
     return () => window.clearTimeout(id);
   }, [charger]);
 
+  const [enCours, setEnCours] = useState(false);
   const restantes = (file?.cartes ?? []).filter((c) => !vues.has(c.cle));
   const carte = restantes[0] ?? null;
   const passer = (cle: string) => setVues((v) => new Set(v).add(cle));
+  // Corrections du 12/10 : « Classer sans suite » (rappel passé depuis plus de 7 jours, relances finies sans réponse).
+  const classer = async (c: CarteUnParUn) => {
+    setEnCours(true);
+    setErreur(null);
+    try {
+      await appelApi(`/api/messagerie/conversations/${c.suiviId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "sans-suite" }) });
+      passer(c.cle);
+    } catch (e) {
+      setErreur(messageErreur(e));
+    } finally {
+      setEnCours(false);
+    }
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -91,6 +106,18 @@ export function UnParUn({ onFermer, onOuvrirConversation }: { onFermer: () => vo
                 <a href={`tel:${carte.telephone}`} onClick={() => noterDebutAppel(carte.leadId ?? `dossier:${carte.dossierId}`, { nom: carte.nom, dossierId: carte.dossierId })} className={BOUTON_PRINCIPAL}>
                   <Phone size={18} aria-hidden /> Appeler
                 </a>
+              </>
+            ) : carte.classer ? (
+              <>
+                <p className="text-[14px] text-texte-2">{carte.raison}</p>
+                <button type="button" disabled={enCours} onClick={() => void classer(carte)} className={BOUTON_PRINCIPAL}>
+                  {carte.classer === "PERDU" ? "Passer en Perdu" : "Classer sans suite"}
+                </button>
+                {carte.telephone ? (
+                  <a href={`tel:${carte.telephone}`} onClick={() => noterDebutAppel(carte.leadId ?? `dossier:${carte.dossierId}`, { nom: carte.nom, dossierId: carte.dossierId })} className={cn(BOUTON_SECONDAIRE_M, "w-full")}>
+                    <Phone size={16} aria-hidden /> Appeler d&apos;abord
+                  </a>
+                ) : null}
               </>
             ) : (
               <>

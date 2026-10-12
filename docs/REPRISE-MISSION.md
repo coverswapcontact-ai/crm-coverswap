@@ -5953,3 +5953,11 @@ prénom. Sinon « Bonjour, ». 3. Retire de « Appels à passer » les dossiers 
   file du jour, « Classer sans suite », 8 propositions, réponse du client, prénom en vrai, migration rejouable) ; un
   test Meta à date fixe réparé au passage (`pont.test.ts` : sa fenêtre de 21 jours ne couvrait plus le lead d'essai du
   20/09 depuis le 11/10). tsc et lint à 0, build vert.
+- **Déployé** (12/10, ~9 h 15) : commit `c0d7683` sur `main` ; `/api/health` de production : commit `c0d7683`, 62 outils,
+  empreinte `078a14e54436`. File du jour de production relue par le connecteur (lecture seule) juste après : 8 « À
+  valider » (une carte par client ; D3 gardé devant D4 pour un devis ouvert ; « Bonjour, » pour les surnoms et les noms
+  inversés), 11 appels (rappels de moins de 7 jours et leads jamais appelés, aucun dossier perdu, aucun client qui a
+  déjà un message dans la file), 1 rappel du 29/09 proposé « Sans suite » ; relue après le passage du moteur de 9 h 30 :
+  rien de recréé, « Où on en est » à jour. Les propositions au-delà de 8 reviennent demain matin, 8 par jour. Le bouton
+  « Classer sans suite » essayé en local sur la base d'essai (lead fictif) : la carte part, le contact passe Sans suite. Rien à faire pour Lucas ; un vrai prénom qui sortirait « Bonjour, » s'ajoute dans
+  `src/lib/messagerie/prenoms.ts`.
